@@ -1,19 +1,24 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { CheckCircle2, XCircle, Clock, Loader2, ChevronDown } from 'lucide-react'
-import { tasks, getAgent, relativeTime, formatDuration } from '../data/mock'
+import { relativeTime, formatDuration } from '../data/mock'
 
 const STATUS_ICON = {
   success: <CheckCircle2 size={14} style={{ color: 'var(--color-success)' }} />,
-  failed:  <XCircle     size={14} style={{ color: 'var(--color-error)' }} />,
-  pending: <Clock       size={14} style={{ color: 'var(--color-busy)' }} />,
-  running: <Loader2     size={14} style={{ color: 'var(--color-accent)', animation: 'spin 1.2s linear infinite' }} />,
+  failed: <XCircle size={14} style={{ color: 'var(--color-error)' }} />,
+  pending: <Clock size={14} style={{ color: 'var(--color-busy)' }} />,
+  running: <Loader2 size={14} style={{ color: 'var(--color-accent)', animation: 'spin 1.2s linear infinite' }} />,
 }
 
 const FILTERS = ['all', 'running', 'success', 'pending', 'failed']
 
-export default function TaskFeed() {
+export default function TaskFeed({ tasks, agents }) {
   const [filter, setFilter] = useState('all')
   const [expanded, setExpanded] = useState(null)
+
+  const agentsById = useMemo(
+    () => new Map(agents.map((agent) => [agent.id, agent])),
+    [agents],
+  )
 
   const filtered = filter === 'all'
     ? tasks
@@ -29,7 +34,6 @@ export default function TaskFeed() {
           Recent Tasks
         </h2>
 
-        {/* Filter pills */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {FILTERS.map((f) => {
             const count = f === 'all' ? tasks.length : tasks.filter((t) => t.status === f).length
@@ -73,7 +77,7 @@ export default function TaskFeed() {
         ) : (
           <ul>
             {filtered.map((task, i) => {
-              const agent = getAgent(task.agentId)
+              const agent = agentsById.get(task.agentId)
               const isOpen = expanded === task.id
               const isLast = i === filtered.length - 1
 
@@ -90,12 +94,10 @@ export default function TaskFeed() {
                     onClick={() => setExpanded(isOpen ? null : task.id)}
                     style={{ background: 'transparent' }}
                   >
-                    {/* Status icon */}
                     <div className="flex-shrink-0 mt-0.5">
                       {STATUS_ICON[task.status]}
                     </div>
 
-                    {/* Title + meta */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span
@@ -128,7 +130,6 @@ export default function TaskFeed() {
                       </div>
                     </div>
 
-                    {/* Expand chevron */}
                     {task.detail && (
                       <ChevronDown
                         size={14}
@@ -141,7 +142,6 @@ export default function TaskFeed() {
                     )}
                   </button>
 
-                  {/* Expanded detail */}
                   {isOpen && task.detail && (
                     <div
                       className="px-5 pb-3.5 text-xs leading-relaxed animate-fade-in"

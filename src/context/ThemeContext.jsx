@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState } from 'react'
 
 const ThemeContext = createContext(null)
@@ -13,7 +14,11 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme === 'neon' ? 'neon' : '')
-    try { localStorage.setItem('hive-theme', theme) } catch {}
+    try {
+      localStorage.setItem('hive-theme', theme)
+    } catch {
+      // Ignore write failures (private mode, storage restrictions)
+    }
   }, [theme])
 
   const toggle = () => setTheme((t) => (t === 'light' ? 'neon' : 'light'))

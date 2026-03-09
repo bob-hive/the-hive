@@ -1,7 +1,6 @@
-import { agents } from '../data/mock'
 import AgentCard from './AgentCard'
 
-export default function AgentGrid() {
+export default function AgentGrid({ agents }) {
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
