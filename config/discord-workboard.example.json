@@ -1,0 +1,47 @@
+{
+  "$schema": "https://example.com/schemas/discord-workboard.schema.json",
+  "guild": {
+    "id": "YOUR_GUILD_ID",
+    "name": "The Hive Ops"
+  },
+  "roles": {
+    "owner": "ROLE_ID_OWNER",
+    "ops_admin": "ROLE_ID_OPS_ADMIN",
+    "reviewer": "ROLE_ID_REVIEWER",
+    "member": "ROLE_ID_MEMBER",
+    "observer": "ROLE_ID_OBSERVER",
+    "agent_orchestrator": "ROLE_ID_AGENT_ORCHESTRATOR",
+    "agent_worker": "ROLE_ID_AGENT_WORKER",
+    "integration_bot": "ROLE_ID_INTEGRATION_BOT"
+  },
+  "channels": {
+    "ops_triage": "CHANNEL_ID_OPS_TRIAGE",
+    "ops_standup": "CHANNEL_ID_OPS_STANDUP",
+    "ops_decisions": "CHANNEL_ID_OPS_DECISIONS",
+    "ops_blockers": "CHANNEL_ID_OPS_BLOCKERS",
+    "wb_backlog": "CHANNEL_ID_WB_BACKLOG",
+    "wb_ready": "CHANNEL_ID_WB_READY",
+    "wb_in_progress": "CHANNEL_ID_WB_IN_PROGRESS",
+    "wb_review": "CHANNEL_ID_WB_REVIEW",
+    "wb_done": "CHANNEL_ID_WB_DONE",
+    "agent_heartbeats": "CHANNEL_ID_AGENT_HEARTBEATS",
+    "agent_jobs": "CHANNEL_ID_AGENT_JOBS",
+    "agent_errors": "CHANNEL_ID_AGENT_ERRORS",
+    "github_events": "CHANNEL_ID_GITHUB_EVENTS",
+    "deploy_events": "CHANNEL_ID_DEPLOY_EVENTS",
+    "audit_log": "CHANNEL_ID_AUDIT_LOG"
+  },
+  "routing": {
+    "info": ["agent_jobs"],
+    "warn": ["ops_blockers", "agent_errors"],
+    "crit": ["ops_blockers", "agent_errors", "audit_log"],
+    "sensitive_events": ["audit_log"]
+  },
+  "policies": {
+    "least_privilege": true,
+    "deny_admin_to_bots": true,
+    "restrict_mass_mentions": true,
+    "redact_secrets": true,
+    "require_human_approval_for_destructive_actions": true
+  }
+}
