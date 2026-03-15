@@ -1,83 +1,111 @@
 /**
- * The Hive — Mock Data Layer
+ * The Hive — Mock Data Layer (v2)
  *
- * All exports here are the single source of truth for UI data.
- * Swap these out for real API calls later by replacing fetchMockDashboardData
- * with a real async fetcher that returns the same shape.
+ * Updated to reflect actual bot roles. Swap fetchMockDashboardData
+ * for a real async fetcher that returns the same shape.
  */
 
 const mins = (n) => n * 60_000
 const days = (n) => n * 24 * 60 * 60_000
 
-const AGENT_SEED = [
+// ── Canonical agent roster ────────────────────────────────────────────────────
+export const AGENT_SEED = [
   {
-    id: 'atlas',
-    name: 'Atlas',
+    id: 'bob',
+    name: 'Bob',
     role: 'Orchestrator',
+    avatar: '😎',
     status: 'online',
-    avatar: '🗺️',
     tasksCompleted: 47,
     tasksRunning: 3,
-    currentTask: 'Coordinating deployment pipeline',
+    currentTask: 'Coordinating multi-agent research sprint',
     uptime: 18420,
     load: 62,
+    lastActiveMs: Date.now() - mins(1),
+    // sparkline data (last 8 ticks, 0-100 load)
+    sparkline: [40, 55, 62, 50, 68, 71, 65, 62],
+  },
+  {
+    id: 'scout',
+    name: 'Scout',
+    role: 'Research',
+    avatar: '🔍',
+    status: 'busy',
+    tasksCompleted: 88,
+    tasksRunning: 2,
+    currentTask: 'Crawling docs for API surface changes',
+    uptime: 21600,
+    load: 74,
+    lastActiveMs: Date.now() - mins(0),
+    sparkline: [30, 45, 60, 72, 68, 80, 78, 74],
   },
   {
     id: 'forge',
     name: 'Forge',
-    role: 'Build Agent',
+    role: 'Builder',
+    avatar: '🔨',
     status: 'busy',
-    avatar: '⚒️',
     tasksCompleted: 134,
     tasksRunning: 1,
     currentTask: 'Compiling the-hive production bundle',
     uptime: 14400,
     load: 91,
-  },
-  {
-    id: 'scout',
-    name: 'Scout',
-    role: 'Research Agent',
-    status: 'online',
-    avatar: '🔭',
-    tasksCompleted: 88,
-    tasksRunning: 2,
-    currentTask: 'Crawling docs for API surface changes',
-    uptime: 21600,
-    load: 38,
+    lastActiveMs: Date.now() - mins(0),
+    sparkline: [60, 70, 85, 88, 90, 93, 91, 91],
   },
   {
     id: 'ledger',
     name: 'Ledger',
-    role: 'Data Agent',
+    role: 'Analytics',
+    avatar: '📊',
     status: 'idle',
-    avatar: '📒',
     tasksCompleted: 221,
     tasksRunning: 0,
     currentTask: '',
     uptime: 7200,
     load: 4,
+    lastActiveMs: Date.now() - mins(18),
+    sparkline: [20, 35, 12, 8, 4, 2, 4, 4],
   },
   {
     id: 'sentinel',
     name: 'Sentinel',
-    role: 'Monitor',
-    status: 'online',
+    role: 'Security',
     avatar: '🛡️',
+    status: 'online',
     tasksCompleted: 1042,
     tasksRunning: 1,
     currentTask: 'Health-checking downstream services',
     uptime: 86400,
     load: 17,
+    lastActiveMs: Date.now() - mins(2),
+    sparkline: [15, 18, 14, 20, 16, 17, 15, 17],
   },
 ]
 
-function createTasks(now) {
+// ── Event feed seed ───────────────────────────────────────────────────────────
+export function createEventFeed(now) {
+  return [
+    { id: 'e-001', type: 'spawned',   agentId: 'forge',    agentName: 'Forge',    timestamp: now - mins(0),   message: 'Build task started: the-hive prod bundle' },
+    { id: 'e-002', type: 'completed', agentId: 'sentinel', agentName: 'Sentinel', timestamp: now - mins(2),   message: 'Health-check passed — all 9 endpoints OK' },
+    { id: 'e-003', type: 'active',    agentId: 'scout',    agentName: 'Scout',    timestamp: now - mins(4),   message: 'Crawling OpenAI changelog page 3/7' },
+    { id: 'e-004', type: 'error',     agentId: 'ledger',   agentName: 'Ledger',   timestamp: now - mins(35),  message: 'OOM during search-index rebuild — heap limit hit' },
+    { id: 'e-005', type: 'completed', agentId: 'scout',    agentName: 'Scout',    timestamp: now - mins(11),  message: 'Summarised GitHub PR #448 — 12 files changed' },
+    { id: 'e-006', type: 'completed', agentId: 'ledger',   agentName: 'Ledger',   timestamp: now - mins(18),  message: 'Daily cost report generated — $4.21 spend' },
+    { id: 'e-007', type: 'spawned',   agentId: 'bob',      agentName: 'Bob',      timestamp: now - mins(48),  message: 'Orchestrating multi-agent research sprint' },
+    { id: 'e-008', type: 'active',    agentId: 'sentinel', agentName: 'Sentinel', timestamp: now - mins(51),  message: 'Monitoring node-02 disk usage (78%) — threshold alert pending' },
+    { id: 'e-009', type: 'completed', agentId: 'forge',    agentName: 'Forge',    timestamp: now - mins(74),  message: 'Patched 6 dependency vulnerabilities' },
+    { id: 'e-010', type: 'completed', agentId: 'bob',      agentName: 'Bob',      timestamp: now - mins(130), message: 'Q1 infrastructure report drafted and saved' },
+  ]
+}
+
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+export function createTasks(now) {
   return [
     {
       id: 't-001',
       title: 'Deploy staging environment',
-      agentId: 'atlas',
+      agentId: 'bob',
       status: 'success',
       timestamp: now - mins(3),
       duration: 47_200,
@@ -148,7 +176,7 @@ function createTasks(now) {
     {
       id: 't-009',
       title: 'Coordinate multi-agent research sprint',
-      agentId: 'atlas',
+      agentId: 'bob',
       status: 'pending',
       timestamp: now - mins(48),
       detail: 'Waiting on Scout + Ledger',
@@ -200,7 +228,7 @@ function createTasks(now) {
     {
       id: 't-015',
       title: 'Draft Q1 infrastructure report',
-      agentId: 'atlas',
+      agentId: 'bob',
       status: 'success',
       timestamp: now - mins(130),
       duration: 22_100,
@@ -214,7 +242,6 @@ function createTrends(now) {
     const dayOffset = 6 - index
     const date = new Date(now - days(dayOffset))
     const day = date.toLocaleDateString('en-US', { weekday: 'short' })
-
     return {
       day,
       dateLabel: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -260,8 +287,9 @@ function createAlerts(now) {
 
 export function generateMockDashboardData() {
   const now = Date.now()
-  const agents = AGENT_SEED.map((agent) => ({ ...agent }))
+  const agents = AGENT_SEED.map((agent) => ({ ...agent, lastActiveMs: agent.lastActiveMs ?? now }))
   const tasks = createTasks(now)
+  const events = createEventFeed(now)
   const trends = createTrends(now)
   const alerts = createAlerts(now)
 
@@ -274,13 +302,7 @@ export function generateMockDashboardData() {
     totalAgents: agents.length,
   }
 
-  return {
-    agents,
-    tasks,
-    trends,
-    alerts,
-    metrics,
-  }
+  return { agents, tasks, events, trends, alerts, metrics }
 }
 
 export async function fetchMockDashboardData() {

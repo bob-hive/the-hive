@@ -2,8 +2,10 @@ import Header from './components/Header'
 import MetricsBar from './components/MetricsBar'
 import Trends from './components/Trends'
 import AgentGrid from './components/AgentGrid'
-import TaskFeed from './components/TaskFeed'
+import LiveFeed from './components/LiveFeed'
+import Timeline from './components/Timeline'
 import AlertFeed from './components/AlertFeed'
+import ClawHubPanel from './components/ClawHubPanel'
 import Footer from './components/Footer'
 import { fetchMockDashboardData } from './data/mock'
 import { usePolling } from './hooks/usePolling'
@@ -23,6 +25,7 @@ export default function App() {
   const dashboard = data ?? {
     agents: [],
     tasks: [],
+    events: [],
     alerts: [],
     trends: [],
     metrics: {
@@ -59,10 +62,23 @@ export default function App() {
         ) : (
           <>
             <MetricsBar metrics={dashboard.metrics} />
-            <Trends trends={dashboard.trends} />
+
+            {/* Agent cards — updated roles + sparklines */}
             <AgentGrid agents={dashboard.agents} />
-            <TaskFeed tasks={dashboard.tasks} agents={dashboard.agents} />
-            <AlertFeed alerts={dashboard.alerts} />
+
+            {/* Live event feed + task timeline side by side on wide screens */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <LiveFeed agents={dashboard.agents} />
+              <Timeline tasks={dashboard.tasks} agents={dashboard.agents} />
+            </div>
+
+            <Trends trends={dashboard.trends} />
+
+            {/* Alerts + ClawHub side by side on wide screens */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <AlertFeed alerts={dashboard.alerts} />
+              <ClawHubPanel />
+            </div>
           </>
         )}
       </main>
