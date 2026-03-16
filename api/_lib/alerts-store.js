@@ -6,8 +6,11 @@ import {
   classifyLane,
   computeFingerprint,
   getDedupeWindowMs,
+  getSuppressWindowMs,
   isDuplicateWithinWindow,
+  findSuppressTarget,
 } from './alerts-classifier.js'
+import { evaluateEscalation } from './escalation-engine.js'
 
 const STORE_VERSION = 1
 const DEFAULT_BASE_DIR = process.env.VERCEL
@@ -55,6 +58,44 @@ function normalizeSeverity(input) {
   const valid = ['critical', 'high', 'warning', 'medium', 'low', 'info']
   if (valid.includes(value)) return value
   return 'warning'
+}
+
+function resolveEscalation(existingEscalation, policy, atIso) {
+  if (!policy.shouldEscalate) {
+    return existingEscalation && existingEscalation.escalated
+      ? existingEscalation
+      : {
+          escalated: false,
+          reason: '',
+          target: 'bob',
+          at: null,
+        }
+  }
+
+  return {
+    escalated: true,
+    reason: policy.reason,
+    target: policy.target,
+    at: existingEscalation?.at || atIso,
+  }
+}
+
+function summarizeSuppression(alerts) {
+  const dedupedAlerts = alerts.filter((alert) => Number(alert.suppressedCount || 0) > 0)
+
+  return {
+    dedupedAlerts: dedupedAlerts.length,
+    suppressedEvents: dedupedAlerts.reduce((sum, alert) => sum + Number(alert.suppressedCount || 0), 0),
+    topFingerprints: dedupedAlerts
+      .sort((a, b) => Number(b.suppressedCount || 0) - Number(a.suppressedCount || 0))
+      .slice(0, 5)
+      .map((alert) => ({
+        fingerprint: alert.fingerprint,
+        source: alert.source,
+        title: alert.title || alert.message,
+        suppressedCount: Number(alert.suppressedCount || 0),
+      })),
+  }
 }
 
 async function ensureStoreDir() {
@@ -138,6 +179,7 @@ export async function listAlerts({ lane, openOnly = false, limit = 200 } = {}) {
   return {
     alerts: filtered,
     updatedAt: snapshot.updatedAt,
+    suppressionStats: summarizeSuppression(snapshot.alerts),
     mock: false,
     source: process.env.VERCEL ? 'LIVE_TMP' : 'LIVE_LOCAL',
   }
@@ -152,6 +194,7 @@ export async function ingestAlert(input, meta = {}) {
   const projectTags = normalizeArray(input.projectTags || input.project)
   const agentTags = normalizeArray(input.agentTags || input.agent)
   const status = normalizeStatus(input.status || 'open')
+  let selectedAlertId = null
 
   if (!title && !message) {
     throw new Error('title or message is required')
@@ -167,10 +210,105 @@ export async function ingestAlert(input, meta = {}) {
       agentTags,
     })).trim()
 
-    const duplicateInWindow = isDuplicateWithinWindow(snapshot.alerts, fingerprint, ts, getDedupeWindowMs())
-    const classification = classifyLane({ severity, title, message, confidence: input.confidence }, { duplicateInWindow })
+    const now = nowIso()
 
-    const alert = {
+    // P0.2 suppression window check (per-fingerprint)
+    const suppressTarget = findSuppressTarget(snapshot.alerts, fingerprint, ts, getSuppressWindowMs())
+
+    if (suppressTarget) {
+      const suppressIndex = snapshot.alerts.findIndex((alert) => alert.id === suppressTarget.id)
+
+      if (suppressIndex >= 0) {
+        const nextAlerts = [...snapshot.alerts]
+        const current = nextAlerts[suppressIndex]
+
+        const candidateClassifyInput = {
+          severity,
+          source,
+          title: current.title || title,
+          message: current.message || message,
+          confidence: input.confidence,
+          _fingerprint: fingerprint,
+          _ts: ts,
+        }
+
+        const reclassification = classifyLane(candidateClassifyInput, {
+          duplicateInWindow: false,
+          alerts: snapshot.alerts,
+        })
+
+        const candidateAlert = {
+          ...current,
+          ts: Math.max(Number(current.ts || 0), ts),
+          severity,
+          source,
+          title: current.title || title,
+          message: current.message || message,
+          lane: reclassification.lane,
+          confidence: reclassification.confidence,
+          status: normalizeStatus(input.status || current.status),
+          remediationAttempts: Array.isArray(current.remediationAttempts) ? current.remediationAttempts : [],
+        }
+
+        const escalationPolicy = evaluateEscalation(candidateAlert, {
+          alerts: snapshot.alerts,
+          nowTs: ts,
+        })
+
+        const updatedAlert = {
+          ...current,
+          ts: Math.max(Number(current.ts || 0), ts),
+          severity: severity || current.severity,
+          lane: candidateAlert.lane,
+          confidence: candidateAlert.confidence,
+          classifyReason: reclassification.reason,
+          status: candidateAlert.status,
+          suppressedCount: Number(current.suppressedCount || 0) + 1,
+          lastSuppressedAt: now,
+          updatedAt: now,
+          escalation: resolveEscalation(current.escalation, escalationPolicy, now),
+        }
+
+        nextAlerts[suppressIndex] = updatedAlert
+
+        const next = {
+          ...snapshot,
+          updatedAt: now,
+          alerts: nextAlerts,
+        }
+
+        selectedAlertId = updatedAlert.id
+
+        await appendEvent({
+          eventType: 'suppressed_ingest',
+          eventTs: now,
+          requestMeta: meta,
+          fingerprint,
+          alertId: updatedAlert.id,
+          suppressedCount: updatedAlert.suppressedCount,
+          escalation: updatedAlert.escalation,
+        })
+
+        return next
+      }
+    }
+
+    const duplicateInWindow = isDuplicateWithinWindow(snapshot.alerts, fingerprint, ts, getDedupeWindowMs())
+    const classifyInput = {
+      severity,
+      source,
+      title,
+      message,
+      confidence: input.confidence,
+      _fingerprint: fingerprint,
+      _ts: ts,
+    }
+    const classification = classifyLane(classifyInput, {
+      duplicateInWindow,
+      alerts: snapshot.alerts,
+    })
+
+    const baseAlert = {
       id: String(input.id || uid()),
       ts,
       source,
@@ -186,28 +324,45 @@ export async function ingestAlert(input, meta = {}) {
       remediationAttempts: Array.isArray(input.remediationAttempts) ? input.remediationAttempts : [],
       classifyReason: classification.reason,
       duplicateInWindow,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
+      suppressedCount: 0,
+      lastSuppressedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    const escalationPolicy = evaluateEscalation(baseAlert, {
+      alerts: snapshot.alerts,
+      nowTs: ts,
+    })
+
+    const alert = {
+      ...baseAlert,
+      escalation: resolveEscalation(null, escalationPolicy, now),
     }
 
     const next = {
       ...snapshot,
-      updatedAt: nowIso(),
+      updatedAt: now,
       alerts: [alert, ...snapshot.alerts],
     }
 
+    selectedAlertId = alert.id
+
     await appendEvent({
       eventType: 'ingest',
-      eventTs: nowIso(),
+      eventTs: now,
       requestMeta: meta,
       alert,
     })
 
     return next
-  }).then((snapshot) => ({
-    alert: snapshot.alerts[0],
-    updatedAt: snapshot.updatedAt,
-  }))
+  }).then((snapshot) => {
+    const alert = snapshot.alerts.find((entry) => entry.id === selectedAlertId) || snapshot.alerts[0] || null
+    return {
+      alert,
+      updatedAt: snapshot.updatedAt,
+    }
+  })
 }
 
 export async function appendRemediationAttempt(alertId, attemptInput = {}, meta = {}) {
@@ -235,28 +390,42 @@ export async function appendRemediationAttempt(alertId, attemptInput = {}, meta 
 
     const nextAlerts = [...snapshot.alerts]
     const current = nextAlerts[index]
-    const updatedAlert = {
+
+    const candidateAlert = {
       ...current,
       status: normalizeStatus(attemptInput.status || current.status),
       remediationAttempts: [...(current.remediationAttempts || []), attempt],
-      updatedAt: nowIso(),
+    }
+
+    const escalationPolicy = evaluateEscalation(candidateAlert, {
+      alerts: snapshot.alerts,
+      nowTs: attempt.ts,
+    })
+
+    const stamp = nowIso()
+
+    const updatedAlert = {
+      ...candidateAlert,
+      updatedAt: stamp,
+      escalation: resolveEscalation(current.escalation, escalationPolicy, stamp),
     }
 
     nextAlerts[index] = updatedAlert
 
     const next = {
       ...snapshot,
-      updatedAt: nowIso(),
+      updatedAt: stamp,
       alerts: nextAlerts,
     }
 
     await appendEvent({
       eventType: 'remediation',
-      eventTs: nowIso(),
+      eventTs: stamp,
       requestMeta: meta,
       alertId: id,
       remediationAttempt: attempt,
       status: updatedAlert.status,
+      escalation: updatedAlert.escalation,
     })
 
     return next
@@ -272,6 +441,7 @@ export function alertStoreInfo() {
     snapshotFile: SNAPSHOT_FILE,
     eventsFile: EVENTS_FILE,
     dedupeWindowMs: getDedupeWindowMs(),
+    suppressWindowMs: getSuppressWindowMs(),
     durability: process.env.VERCEL
       ? 'ephemeral_file_store_/tmp (serverless-safe but not durable)'
       : 'local_file_store',

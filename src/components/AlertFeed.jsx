@@ -1,5 +1,15 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, BellRing, ChevronDown, CircleDot, Info, Siren } from 'lucide-react'
+import {
+  AlertTriangle,
+  BellRing,
+  ChevronDown,
+  CircleDot,
+  Info,
+  Siren,
+  ShieldAlert,
+  ShieldCheck,
+  CopyCheck,
+} from 'lucide-react'
 import { relativeTime } from '../data/mock'
 import { useTheme } from '../context/ThemeContext'
 
@@ -42,6 +52,46 @@ const SEVERITY_CONFIG = {
   },
 }
 
+function EscalationBadge({ escalation }) {
+  if (!escalation?.escalated) return null
+
+  const isAni = escalation.target === 'ani'
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+      style={{
+        background: isAni ? 'rgba(220,38,38,0.12)' : 'rgba(234,88,12,0.12)',
+        color: isAni ? '#b91c1c' : '#c2410c',
+        border: `1px solid ${isAni ? 'rgba(220,38,38,0.28)' : 'rgba(234,88,12,0.28)'}`,
+      }}
+      title={escalation.reason || 'Escalated'}
+    >
+      <ShieldAlert size={11} />
+      Escalated → {isAni ? 'Ani' : 'Bob'}
+    </span>
+  )
+}
+
+function SuppressionBadge({ suppressedCount }) {
+  const count = Number(suppressedCount || 0)
+  if (count <= 0) return null
+
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+      style={{
+        background: 'rgba(37,99,235,0.10)',
+        color: '#1d4ed8',
+        border: '1px solid rgba(37,99,235,0.24)',
+      }}
+      title={`Suppressed ${count} duplicate event${count === 1 ? '' : 's'}`}
+    >
+      <CopyCheck size={11} />
+      +{count} suppressed
+    </span>
+  )
+}
+
 function AlertCard({ alert, isNeon, fallbackTs }) {
   const cfg = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.warning
   const colors = isNeon ? cfg.neon : cfg.light
@@ -74,8 +124,42 @@ function AlertCard({ alert, isNeon, fallbackTs }) {
         <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>{alert.message}</p>
       ) : null}
 
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <EscalationBadge escalation={alert.escalation} />
+        <SuppressionBadge suppressedCount={alert.suppressedCount} />
+      </div>
+
       <p className="mt-1.5 text-xs" style={{ color: 'var(--color-text-muted)' }}>
         {alert.source || 'unknown'} · {alert.ts || fallbackTs ? relativeTime(alert.ts || fallbackTs) : '—'}
+      </p>
+    </div>
+  )
+}
+
+function EscalationSummary({ count }) {
+  const value = Number(count || 0)
+  const hasEscalations = value > 0
+
+  return (
+    <div
+      className="rounded-lg px-3 py-2.5"
+      style={{
+        border: `1px solid ${hasEscalations ? 'rgba(220,38,38,0.25)' : 'var(--color-border)'}`,
+        background: hasEscalations ? 'rgba(220,38,38,0.06)' : 'var(--color-bg-secondary)',
+      }}
+    >
+      <div className="flex items-center gap-2">
+        {hasEscalations ? (
+          <ShieldAlert size={14} style={{ color: '#b91c1c' }} />
+        ) : (
+          <ShieldCheck size={14} style={{ color: 'var(--color-success)' }} />
+        )}
+        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-secondary)' }}>
+          Escalation summary
+        </p>
+      </div>
+      <p className="text-sm mt-1" style={{ color: 'var(--color-text-primary)' }}>
+        {hasEscalations ? `${value} escalated alert${value === 1 ? '' : 's'} need attention` : 'No escalated alerts pending'}
       </p>
     </div>
   )
@@ -86,9 +170,10 @@ export default function AlertFeed({ alerts = [], meta = {} }) {
   const { theme } = useTheme()
   const isNeon = theme === 'neon'
 
-  const { signalAlerts, noiseAlerts } = useMemo(() => {
+  const { signalAlerts, noiseAlerts, escalatedCount } = useMemo(() => {
     const signal = []
     const noise = []
+    let escalated = 0
 
     alerts.forEach((alert) => {
       if (alert.lane === 'signal') {
@@ -96,11 +181,16 @@ export default function AlertFeed({ alerts = [], meta = {} }) {
       } else {
         noise.push(alert)
       }
+
+      if (alert.lane === 'signal' && alert.status !== 'resolved' && alert.escalation?.escalated) {
+        escalated += 1
+      }
     })
 
     return {
       signalAlerts: signal,
       noiseAlerts: noise,
+      escalatedCount: escalated,
     }
   }, [alerts])
 
@@ -124,6 +214,10 @@ export default function AlertFeed({ alerts = [], meta = {} }) {
           </span>
           <span>Freshness: {freshnessTs ? relativeTime(freshnessTs) : '—'}</span>
         </div>
+      </div>
+
+      <div className="mb-3">
+        <EscalationSummary count={escalatedCount} />
       </div>
 
       <div className="card overflow-hidden">

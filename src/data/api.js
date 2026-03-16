@@ -130,6 +130,7 @@ export async function fetchDashboardData() {
       latestTs: alertsRes.value?.latestTs || 0,
       ts: alertsRes.value?.ts || Date.now(),
       updatedAt: alertsRes.value?.updatedAt || null,
+      suppressionStats: alertsRes.value?.suppressionStats || null,
     },
     _offline: false,
     _isMock: isMock,
