@@ -75,6 +75,7 @@ export async function fetchDashboardData() {
   }
 
   const results = await Promise.allSettled([
+    apiFetch('/api/alerts'),
     apiFetch('/api/agents/status'),
     apiFetch('/api/agents/activity'),
     apiFetch('/api/sessions'),
@@ -92,15 +93,16 @@ export async function fetchDashboardData() {
     return { ...generateMockDashboardData(), _offline: true }
   }
 
-  const [agentsRes, activityRes, sessionsRes, statsRes, healthRes] = results
+  const [alertsRes, agentsRes, activityRes, sessionsRes, statsRes, healthRes] = results
 
+  const alerts = alertsRes.status === 'fulfilled' ? (alertsRes.value.alerts ?? []) : []
   const agents = agentsRes.status === 'fulfilled' ? (agentsRes.value.agents ?? []) : []
   const events = activityRes.status === 'fulfilled' ? (activityRes.value.events ?? []) : []
   const sessions = sessionsRes.status === 'fulfilled' ? (sessionsRes.value.sessions ?? []) : []
   const stats = statsRes.status === 'fulfilled' ? statsRes.value : {}
   const health = healthRes.status === 'fulfilled' ? healthRes.value : {}
 
-  const isMock = agentsRes.value?.mock || statsRes.value?.mock
+  const isMock = Boolean(alertsRes.value?.mock || agentsRes.value?.mock || statsRes.value?.mock)
   const metrics = {
     tasksCompletedToday: stats.tasksCompletedToday ?? 0,
     activeSessions: stats.activeSessions ?? agents.filter((a) => a.status !== 'idle').length,
@@ -119,9 +121,16 @@ export async function fetchDashboardData() {
     events: events.length > 0 ? events : mockData.events,
     tasks: mockData.tasks,
     trends: mockData.trends,
-    alerts: mockData.alerts,
+    alerts: alerts.length > 0 ? alerts : mockData.alerts,
     sessions,
     metrics,
+    alertsMeta: {
+      source: alertsRes.value?.source || (alerts.length > 0 ? 'LIVE' : 'MOCK'),
+      isMock: Boolean(alertsRes.value?.mock || alerts.length === 0),
+      latestTs: alertsRes.value?.latestTs || 0,
+      ts: alertsRes.value?.ts || Date.now(),
+      updatedAt: alertsRes.value?.updatedAt || null,
+    },
     _offline: false,
     _isMock: isMock,
   }

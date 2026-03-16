@@ -33,6 +33,8 @@ Open `http://localhost:5173` and sign in with an allowed Google account.
 - `OPENCLAW_GATEWAY_URL`
 - `OPENCLAW_API_TOKEN`
 - `MOCK_MODE`
+- `HIVE_ALERTS_DIR` (optional alert store path override)
+- `HIVE_ALERT_DEDUPE_WINDOW_MS` (optional dedupe window override)
 
 ## Scripts
 
@@ -59,3 +61,4 @@ vercel --prod
 - Auth setup: `docs/auth.md`
 - Security model: `docs/security.md`
 - Product/UI references: `docs/ui-direction-agentclaw.md`
+- Alerts control plane: `docs/alerts-control-plane.md`

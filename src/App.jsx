@@ -192,6 +192,13 @@ function Dashboard() {
     alerts: [],
     trends: [],
     sessions: [],
+    alertsMeta: {
+      source: 'MOCK',
+      isMock: true,
+      latestTs: 0,
+      ts: 0,
+      updatedAt: null,
+    },
     metrics: {
       tasksCompletedToday: 0,
       activeSessions: 0,
@@ -251,6 +258,8 @@ function Dashboard() {
           </div>
         ) : (
           <>
+            <AlertFeed alerts={dashboard.alerts} meta={dashboard.alertsMeta} />
+
             <MetricsBar metrics={dashboard.metrics} />
 
             <AgentGrid agents={dashboard.agents} />
@@ -264,10 +273,7 @@ function Dashboard() {
 
             <BacklogPanel />
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <AlertFeed alerts={dashboard.alerts} />
-              <ClawHubPanel />
-            </div>
+            <ClawHubPanel />
           </>
         )}
       </main>
