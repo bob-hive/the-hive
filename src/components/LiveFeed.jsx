@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Zap, CheckCircle2, XCircle, Activity } from 'lucide-react'
 import { createEventFeed, relativeTime } from '../data/mock'
 
-// Mock new events that trickle in over time
+// Synthetic events injected over time when no real data is flowing
 const SYNTHETIC_EVENTS = [
   { agentId: 'forge',    agentName: 'Forge',    type: 'active',    message: 'Build progress: 85% — linking chunks' },
   { agentId: 'scout',    agentName: 'Scout',    type: 'completed', message: 'Indexed page 4/7 of API changelog' },
@@ -29,16 +29,27 @@ const TYPE_LABEL = {
 let syntheticIdx = 0
 let eventSeq = 100
 
-export default function LiveFeed({ agents = [] }) {
-  const [events, setEvents] = useState(() => createEventFeed(Date.now()))
+export default function LiveFeed({ agents = [], events: propEvents = null }) {
+  // When propEvents is provided (real API data), seed the feed from it.
+  // Otherwise fall back to the mock seed.
+  const seedEvents = propEvents && propEvents.length > 0 ? propEvents : createEventFeed(Date.now())
+  const [events, setEvents] = useState(seedEvents)
   const [paused, setPaused] = useState(false)
   const listRef = useRef(null)
   const pausedRef = useRef(false)
 
   pausedRef.current = paused
 
-  // Simulated polling — injects a new event every ~6 seconds
+  // Sync when prop events change (real data poll)
   useEffect(() => {
+    if (!propEvents || propEvents.length === 0) return
+    setEvents(propEvents)
+  }, [propEvents])
+
+  // Only inject synthetic events when NOT using real API data
+  useEffect(() => {
+    if (propEvents && propEvents.length > 0) return  // real data — no synthetic injection
+
     const timer = setInterval(() => {
       if (pausedRef.current) return
       const template = SYNTHETIC_EVENTS[syntheticIdx % SYNTHETIC_EVENTS.length]
@@ -51,7 +62,7 @@ export default function LiveFeed({ agents = [] }) {
       setEvents((prev) => [newEvent, ...prev].slice(0, 50))
     }, 6000)
     return () => clearInterval(timer)
-  }, [])
+  }, [propEvents])
 
   const agentsById = new Map((agents).map((a) => [a.id, a]))
 
