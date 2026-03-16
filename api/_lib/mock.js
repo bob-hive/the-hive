@@ -108,6 +108,92 @@ export function getMockSessions() {
   ]
 }
 
+export function getMockJobsData() {
+  const now = Date.now()
+
+  const jobs = [
+    {
+      id: 'job-001',
+      key: 'agent:ledger:cron:daily-report',
+      name: 'Daily cost report',
+      cadence: 'daily',
+      nextRunMs: now + mins(42),
+      lastRunMs: now - mins(18),
+      lastRunStatus: 'success',
+      enabled: true,
+      owner: 'ledger',
+      target: 'telegram',
+    },
+    {
+      id: 'job-002',
+      key: 'agent:sentinel:cron:health-check',
+      name: 'Platform health check',
+      cadence: 'hourly',
+      nextRunMs: now + mins(19),
+      lastRunMs: now - mins(41),
+      lastRunStatus: 'success',
+      enabled: true,
+      owner: 'sentinel',
+      target: 'alerts-health',
+    },
+    {
+      id: 'job-003',
+      key: 'agent:scout:cron:weekly-digest',
+      name: 'Weekly research digest',
+      cadence: 'weekly',
+      nextRunMs: now + mins(60 * 24 * 2),
+      lastRunMs: now - mins(60 * 24 * 5),
+      lastRunStatus: 'failed',
+      enabled: true,
+      owner: 'scout',
+      target: 'project-tracker',
+    },
+    {
+      id: 'job-004',
+      key: 'agent:bob:cron:monthly-ops-review',
+      name: 'Monthly ops review',
+      cadence: 'monthly',
+      nextRunMs: now + mins(60 * 24 * 11),
+      lastRunMs: now - mins(60 * 24 * 19),
+      lastRunStatus: 'success',
+      enabled: true,
+      owner: 'bob',
+      target: 'bob-orchestrator',
+    },
+    {
+      id: 'job-005',
+      key: 'agent:forge:cron:stale-branch-cleanup',
+      name: 'Stale branch cleanup',
+      cadence: 'weekly',
+      nextRunMs: now + mins(60 * 24 * 6),
+      lastRunMs: now - mins(60 * 24 * 1),
+      lastRunStatus: 'disabled',
+      enabled: false,
+      owner: 'forge',
+      target: 'github',
+    },
+  ]
+
+  const nextUpcoming = jobs
+    .filter((job) => job.enabled && typeof job.nextRunMs === 'number' && job.nextRunMs >= now)
+    .sort((a, b) => a.nextRunMs - b.nextRunMs)[0] || null
+
+  return {
+    jobs,
+    summary: {
+      totalActiveJobs: jobs.filter((job) => job.enabled).length,
+      failedOrRecentIssueCount: jobs.filter((job) => job.lastRunStatus === 'failed').length,
+      nextUpcomingRun: nextUpcoming
+        ? {
+            jobId: nextUpcoming.id,
+            jobName: nextUpcoming.name,
+            nextRunMs: nextUpcoming.nextRunMs,
+          }
+        : null,
+    },
+  }
+}
+
 export function getMockStats() {
   return {
     totalSessions: 5,

@@ -6,6 +6,8 @@ import Trends from './components/Trends'
 import AgentGrid from './components/AgentGrid'
 import LiveFeed from './components/LiveFeed'
 import Timeline from './components/Timeline'
+import JobsSummaryCard from './components/JobsSummaryCard'
+import JobsOperationsPanel from './components/JobsOperationsPanel'
 import EscalationsPanel from './components/EscalationsPanel'
 import AlertFeed from './components/AlertFeed'
 import ClawHubPanel from './components/ClawHubPanel'
@@ -195,6 +197,12 @@ function Dashboard() {
     escalations: [],
     trends: [],
     sessions: [],
+    jobs: [],
+    jobsSummary: {
+      totalActiveJobs: 0,
+      failedOrRecentIssueCount: 0,
+      nextUpcomingRun: null,
+    },
     alertsMeta: {
       source: 'MOCK',
       isMock: true,
@@ -277,12 +285,16 @@ function Dashboard() {
 
             <MetricsBar metrics={dashboard.metrics} />
 
+            <JobsSummaryCard summary={dashboard.jobsSummary} />
+
             <AgentGrid agents={dashboard.agents} />
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <LiveFeed agents={dashboard.agents} events={dashboard.events} />
               <Timeline tasks={dashboard.tasks} agents={dashboard.agents} />
             </div>
+
+            <JobsOperationsPanel jobs={dashboard.jobs} />
 
             <Trends trends={dashboard.trends} />
 

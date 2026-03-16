@@ -87,6 +87,7 @@ export async function fetchDashboardData() {
     apiFetch('/api/sessions'),
     apiFetch('/api/stats'),
     apiFetch('/api/health'),
+    apiFetch('/api/jobs'),
   ])
 
   const allRejected = results.every((r) => r.status === 'rejected')
@@ -99,7 +100,7 @@ export async function fetchDashboardData() {
     return { ...generateMockDashboardData(), _offline: true }
   }
 
-  const [alertsRes, escalationsRes, agentsRes, activityRes, sessionsRes, statsRes, healthRes] = results
+  const [alertsRes, escalationsRes, agentsRes, activityRes, sessionsRes, statsRes, healthRes, jobsRes] = results
 
   const alerts = alertsRes.status === 'fulfilled' ? (alertsRes.value.alerts ?? []) : []
   const escalations = escalationsRes.status === 'fulfilled' ? (escalationsRes.value.escalations ?? []) : []
@@ -108,8 +109,16 @@ export async function fetchDashboardData() {
   const sessions = sessionsRes.status === 'fulfilled' ? (sessionsRes.value.sessions ?? []) : []
   const stats = statsRes.status === 'fulfilled' ? statsRes.value : {}
   const health = healthRes.status === 'fulfilled' ? healthRes.value : {}
+  const jobs = jobsRes.status === 'fulfilled' ? (jobsRes.value.jobs ?? []) : []
+  const jobsSummary = jobsRes.status === 'fulfilled' ? (jobsRes.value.summary ?? null) : null
 
-  const isMock = Boolean(alertsRes.value?.mock || escalationsRes.value?.mock || agentsRes.value?.mock || statsRes.value?.mock)
+  const isMock = Boolean(
+    alertsRes.value?.mock ||
+    escalationsRes.value?.mock ||
+    agentsRes.value?.mock ||
+    statsRes.value?.mock ||
+    jobsRes.value?.mock
+  )
   const metrics = {
     tasksCompletedToday: stats.tasksCompletedToday ?? 0,
     activeSessions: stats.activeSessions ?? agents.filter((a) => a.status !== 'idle').length,
@@ -129,6 +138,12 @@ export async function fetchDashboardData() {
     tasks: mockData.tasks,
     trends: mockData.trends,
     alerts: alerts.length > 0 ? alerts : mockData.alerts,
+    jobs: jobs.length > 0 ? jobs : (mockData.jobs ?? []),
+    jobsSummary: jobsSummary ?? mockData.jobsSummary ?? {
+      totalActiveJobs: 0,
+      failedOrRecentIssueCount: 0,
+      nextUpcomingRun: null,
+    },
     escalations,
     sessions,
     metrics,

@@ -252,6 +252,84 @@ function createTrends(now) {
   })
 }
 
+function createJobs(now) {
+  return [
+    {
+      id: 'job-001',
+      name: 'Daily cost report',
+      cadence: 'daily',
+      nextRunMs: now + mins(42),
+      lastRunMs: now - mins(18),
+      lastRunStatus: 'success',
+      enabled: true,
+      owner: 'ledger',
+      target: 'telegram',
+    },
+    {
+      id: 'job-002',
+      name: 'Platform health check',
+      cadence: 'hourly',
+      nextRunMs: now + mins(19),
+      lastRunMs: now - mins(41),
+      lastRunStatus: 'success',
+      enabled: true,
+      owner: 'sentinel',
+      target: 'alerts-health',
+    },
+    {
+      id: 'job-003',
+      name: 'Weekly research digest',
+      cadence: 'weekly',
+      nextRunMs: now + mins(60 * 24 * 2),
+      lastRunMs: now - mins(60 * 24 * 5),
+      lastRunStatus: 'failed',
+      enabled: true,
+      owner: 'scout',
+      target: 'project-tracker',
+    },
+    {
+      id: 'job-004',
+      name: 'Monthly ops review',
+      cadence: 'monthly',
+      nextRunMs: now + mins(60 * 24 * 11),
+      lastRunMs: now - mins(60 * 24 * 19),
+      lastRunStatus: 'success',
+      enabled: true,
+      owner: 'bob',
+      target: 'bob-orchestrator',
+    },
+    {
+      id: 'job-005',
+      name: 'Stale branch cleanup',
+      cadence: 'weekly',
+      nextRunMs: now + mins(60 * 24 * 6),
+      lastRunMs: now - mins(60 * 24 * 1),
+      lastRunStatus: 'disabled',
+      enabled: false,
+      owner: 'forge',
+      target: 'github',
+    },
+  ]
+}
+
+function buildJobsSummary(jobs, now) {
+  const nextUpcoming = jobs
+    .filter((job) => job.enabled && job.nextRunMs && job.nextRunMs >= now)
+    .sort((a, b) => a.nextRunMs - b.nextRunMs)[0] || null
+
+  return {
+    totalActiveJobs: jobs.filter((job) => job.enabled).length,
+    failedOrRecentIssueCount: jobs.filter((job) => job.lastRunStatus === 'failed').length,
+    nextUpcomingRun: nextUpcoming
+      ? {
+          jobId: nextUpcoming.id,
+          jobName: nextUpcoming.name,
+          nextRunMs: nextUpcoming.nextRunMs,
+        }
+      : null,
+  }
+}
+
 function createAlerts(now) {
   return [
     {
@@ -312,6 +390,8 @@ export function generateMockDashboardData() {
   const events = createEventFeed(now)
   const trends = createTrends(now)
   const alerts = createAlerts(now)
+  const jobs = createJobs(now)
+  const jobsSummary = buildJobsSummary(jobs, now)
 
   const metrics = {
     tasksCompletedToday: tasks.filter((t) => t.status === 'success').length,
@@ -322,7 +402,7 @@ export function generateMockDashboardData() {
     totalAgents: agents.length,
   }
 
-  return { agents, tasks, events, trends, alerts, metrics }
+  return { agents, tasks, events, trends, alerts, metrics, jobs, jobsSummary }
 }
 
 export async function fetchMockDashboardData() {
