@@ -4,6 +4,8 @@
  * If not set, auth is skipped (open access — fine for internal/demo use).
  */
 
+import process from 'node:process'
+
 export function checkHiveApiKey(req) {
   const expectedKey = process.env.HIVE_API_KEY?.trim()
   if (!expectedKey) return true  // not configured → allow all

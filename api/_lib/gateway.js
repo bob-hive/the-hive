@@ -9,6 +9,7 @@
  *   4. Return result and close
  */
 
+import process from 'node:process'
 import { randomUUID } from 'crypto'
 import WebSocketImpl from 'ws'
 
@@ -36,12 +37,11 @@ export async function gatewayRpc({ gatewayUrl, token, method, params = {} }) {
     let connectId = null
     let callId = null
     let settled = false
-    let connected = false
 
     function cleanup() {
       clearTimeout(connectTimer)
       clearTimeout(requestTimer)
-      try { ws?.terminate?.() ?? ws?.close?.() } catch {}
+      try { ws?.terminate?.() ?? ws?.close?.() } catch { return }
     }
 
     function settle(err, value) {
@@ -105,8 +105,6 @@ export async function gatewayRpc({ gatewayUrl, token, method, params = {} }) {
         }
         // Auth OK — now issue the real RPC call
         clearTimeout(connectTimer)
-        connected = true
-
         callId = randomUUID()
         requestTimer = setTimeout(() => settle(new Error(`Gateway RPC timeout: ${method}`)), REQUEST_TIMEOUT_MS)
         ws.send(JSON.stringify({ type: 'req', id: callId, method, params }))

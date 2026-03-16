@@ -24,6 +24,8 @@ const DATE_RANGES = [
   { label: 'All time', ms: Infinity },
 ]
 
+const getNow = () => Date.now()
+
 export default function Timeline({ tasks = [], agents = [] }) {
   const [statusFilter, setStatusFilter] = useState('all')
   const [agentFilter, setAgentFilter]   = useState('all')
@@ -32,7 +34,7 @@ export default function Timeline({ tasks = [], agents = [] }) {
   const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents])
 
   const filtered = useMemo(() => {
-    const cutoff = dateRange.ms === Infinity ? 0 : Date.now() - dateRange.ms
+    const cutoff = dateRange.ms === Infinity ? 0 : getNow() - dateRange.ms
     return tasks.filter((t) => {
       if (statusFilter !== 'all' && t.status !== statusFilter) return false
       if (agentFilter !== 'all' && t.agentId !== agentFilter) return false

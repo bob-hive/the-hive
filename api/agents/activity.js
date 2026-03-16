@@ -9,19 +9,41 @@ import { tryGatewayRpc, getGatewayConfig } from '../_lib/gateway.js'
 import { getMockActivity } from '../_lib/mock.js'
 import { checkHiveApiKey, jsonResponse, unauthorizedResponse, corsHeaders } from '../_lib/auth.js'
 
-/** Parse agentId from a session key like "agent:main:telegram:direct:..." */
-function agentIdFromKey(key) {
+/** Parse agentId from a session. Prefer explicit field, then parse from key. */
+function agentIdFromSession(session) {
+  if (session?.agentId) return String(session.agentId)
+
+  const key = session?.key || ''
   if (!key) return 'unknown'
+
   const parts = key.split(':')
   if (parts[0] === 'agent' && parts[1]) return parts[1]
   return parts[0] || 'unknown'
 }
 
-/** Derive event type from session key/channel */
+/** Best-effort timestamp extraction from known session fields. */
+function sessionTimestamp(session) {
+  const candidates = [session?.lastActiveMs, session?.updatedAt, session?.createdAt]
+
+  for (const value of candidates) {
+    if (!value) continue
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+
+    const parsed = Date.parse(String(value))
+    if (!Number.isNaN(parsed)) return parsed
+  }
+
+  return null
+}
+
+/** Derive event type from session status/key/channel */
 function eventTypeFromSession(session) {
   const key = session.key || ''
   const channel = session.channel || ''
+  const status = String(session.status || '').toLowerCase()
 
+  if (status.includes('error') || status.includes('fail')) return 'error'
+  if (status.includes('complete') || status.includes('success') || status.includes('done')) return 'completed'
   if (key.includes(':subagent:')) return 'spawned'
   if (key.includes(':cron:')) return 'completed'
   if (channel === 'telegram' || channel === 'discord') return 'active'
@@ -72,17 +94,20 @@ export default async function handler(req, res) {
 
     // Convert sessions to activity events
     const events = sessions
-      .filter((s) => s.key && s.lastActiveMs)
-      .sort((a, b) => (b.lastActiveMs || 0) - (a.lastActiveMs || 0))
+      .map((session) => ({ ...session, __ts: sessionTimestamp(session) }))
+      .filter((session) => Boolean(session.__ts))
+      .sort((a, b) => (b.__ts || 0) - (a.__ts || 0))
       .slice(0, 30)
       .map((session, i) => {
-        const agentId = agentIdFromKey(session.key)
+        const agentId = agentIdFromSession(session)
+        const baseId = session.id || session.sessionId || session.key || `session-${i}`
+
         return {
-          id: `ev-${session.key?.replace(/[^a-z0-9]/gi, '-')}-${i}`,
+          id: `ev-${String(baseId).replace(/[^a-z0-9]/gi, '-')}-${i}`,
           type: eventTypeFromSession(session),
           agentId,
           agentName: nameFromId(agentId),
-          timestamp: session.lastActiveMs || Date.now(),
+          timestamp: session.__ts || Date.now(),
           message: messageFromSession(session),
         }
       })
