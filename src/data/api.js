@@ -87,7 +87,7 @@ export async function fetchDashboardData() {
     apiFetch('/api/sessions'),
     apiFetch('/api/stats'),
     apiFetch('/api/health'),
-    apiFetch('/api/jobs'),
+    apiFetch('/api/sessions?scope=jobs&limit=200'),
   ])
 
   const allRejected = results.every((r) => r.status === 'rejected')
