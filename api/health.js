@@ -15,7 +15,7 @@ import { jsonResponse, corsHeaders } from './_lib/auth.js'
  * Return only { ok, channels: { <name>: { ok } } }
  */
 function sanitizeHealth(raw) {
-  const ok = raw?.status === 'ok' || raw?.status === 'healthy'
+  const ok = raw?.ok === true || raw?.status === 'ok' || raw?.status === 'healthy'
 
   // Build channels map — status only, no metadata
   const channels = {}
