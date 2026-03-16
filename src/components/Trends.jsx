@@ -28,8 +28,7 @@ export default function Trends({ trends }) {
   return (
     <section>
       <h2
-        className="text-xs font-semibold uppercase tracking-widest mb-3"
-        style={{ color: 'var(--color-text-muted)' }}
+        className="section-title mb-3"
       >
         Trends (Last 7 Days)
       </h2>

@@ -4,10 +4,7 @@ export default function AgentGrid({ agents }) {
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <h2
-          className="text-xs font-semibold uppercase tracking-widest"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
+        <h2 className="section-title">
           Agents
         </h2>
         <span

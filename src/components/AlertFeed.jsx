@@ -36,10 +36,7 @@ export default function AlertFeed({ alerts }) {
         className="w-full flex items-center justify-between mb-3"
         onClick={() => setOpen((v) => !v)}
       >
-        <h2
-          className="text-xs font-semibold uppercase tracking-widest"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
+        <h2 className="section-title">
           Alert Feed
         </h2>
         <ChevronDown

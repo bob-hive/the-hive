@@ -39,8 +39,7 @@ export default function MetricsBar({ metrics }) {
   return (
     <section>
       <h2
-        className="text-xs font-semibold uppercase tracking-widest mb-3"
-        style={{ color: 'var(--color-text-muted)' }}
+        className="section-title mb-3"
       >
         Overview
       </h2>

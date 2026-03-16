@@ -70,7 +70,7 @@ export default function LiveFeed({ agents = [], events: propEvents = null }) {
     <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
+          <h2 className="section-title">
             Live Feed
           </h2>
           {/* Live indicator */}

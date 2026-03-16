@@ -26,7 +26,7 @@ export default function ClawHubPanel() {
   return (
     <section className="animate-fade-in" style={{ animationDelay: '0.35s' }}>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
+        <h2 className="section-title">
           ClawHub Skills
         </h2>
         <a

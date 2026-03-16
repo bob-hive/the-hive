@@ -47,7 +47,7 @@ export default function Timeline({ tasks = [], agents = [] }) {
     <section className="animate-fade-in" style={{ animationDelay: '0.25s' }}>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
+        <h2 className="section-title">
           Task Timeline
         </h2>
 
