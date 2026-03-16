@@ -1,0 +1,286 @@
+{
+  "version": 1,
+  "planning": {
+    "label": "Planning Session Board",
+    "updateCadence": "Update weekly before sprint planning and immediately after major milestone shifts.",
+    "source": "Local JSON seed (ready for API swap in future phase)"
+  },
+  "projects": [
+    {
+      "id": "sub-agent-infrastructure",
+      "roadmapRef": "Project 1",
+      "name": "Sub-Agent Infrastructure",
+      "ragStatus": "amber",
+      "progressSummary": "Sub-agent spawning and model routing are validated; coordination and recovery patterns still need hardening.",
+      "owner": "Bob",
+      "nextSprintFocus": "Validate inter-agent communication and handoff failure recovery, then document orchestration patterns.",
+      "detailedStatus": "Core spawn flows are stable, but production readiness depends on proving handoff reliability and codifying failure-playbooks.",
+      "notes": [
+        "Basic sub-agent spawning works in real usage.",
+        "Model routing policy exists (haiku/sonnet/opus by complexity)."
+      ],
+      "nextSprint": [
+        "Run agent-to-agent messaging tests.",
+        "Run handoff chain tests (A -> B with full context).",
+        "Test recovery after forced agent reset.",
+        "Publish ORCHESTRATION.md patterns."
+      ],
+      "blockers": [
+        "No documented recovery playbook yet.",
+        "Inter-agent comms pattern not fully validated."
+      ],
+      "recommendations": [
+        "Adopt the phase-3 verification contract for all coding sub-agent tasks.",
+        "Add telemetry tags for handoff and retry attempts."
+      ],
+      "backlog": [
+        "Persistent handoff state snapshots.",
+        "Automated chaos test scenarios for sub-agent failures."
+      ],
+      "lastUpdated": "2026-03-16T14:15:00-05:00"
+    },
+    {
+      "id": "discord-workboard",
+      "roadmapRef": "Project 2",
+      "name": "Discord Workboard",
+      "ragStatus": "amber",
+      "progressSummary": "Channel architecture and dispatcher tooling are done; live status wiring and task commands remain.",
+      "owner": "Bob + Scout/Forge",
+      "nextSprintFocus": "Connect live agent status updates into Discord and scope task-management bot commands.",
+      "detailedStatus": "Foundational docs, templates, and dispatcher scripts are ready. Remaining work is operational wiring and interaction commands.",
+      "notes": [
+        "Dispatcher mapping/runbook created in docs.",
+        "Payload templates and routing fallback policies exist."
+      ],
+      "nextSprint": [
+        "Enable live status posting from orchestrator streams.",
+        "Define first command set for task lifecycle interactions."
+      ],
+      "blockers": [
+        "Live status integration not connected yet."
+      ],
+      "recommendations": [
+        "Start with read-only status mirroring before enabling mutating commands.",
+        "Link project updates to #project-tracker for a single planning source of truth."
+      ],
+      "backlog": [
+        "Thread-level incident command workflow.",
+        "Role-based summary digests by channel lane."
+      ],
+      "lastUpdated": "2026-03-16T14:20:00-05:00"
+    },
+    {
+      "id": "the-hive-dashboard",
+      "roadmapRef": "Project 3",
+      "name": "The Hive — Agent Activity Dashboard",
+      "ragStatus": "amber",
+      "progressSummary": "v1 shipped and deployed; live feeds, richer history, and planning/ops surfaces are actively being built.",
+      "owner": "Bob",
+      "nextSprintFocus": "Deliver P0 identity features: richer live activity, run history, and current-task visibility with reliable backend signals.",
+      "detailedStatus": "UI foundation and deployment are stable. Core challenge is data quality + backend completeness to power P0 reliably.",
+      "notes": [
+        "Production URL is live on Vercel.",
+        "P0/P1/P2 roadmap and competitor analysis backlog are in place."
+      ],
+      "nextSprint": [
+        "Improve /api/agents/activity event mapping quality.",
+        "Ship current-task progress components.",
+        "Add explicit LIVE/MOCK and data freshness badges across key panels."
+      ],
+      "blockers": [
+        "Live data backend still partial.",
+        "Event stream can be sparse/noisy depending on source coverage."
+      ],
+      "recommendations": [
+        "Prioritize alert/remediation logging before adding more visual polish.",
+        "Gate new UI widgets on backend freshness SLAs."
+      ],
+      "backlog": [
+        "Intervention controls (pause/kill) in dashboard.",
+        "Conversation synthesis and morning briefing panel."
+      ],
+      "lastUpdated": "2026-03-16T14:25:00-05:00"
+    },
+    {
+      "id": "additional-skills",
+      "roadmapRef": "Project 4",
+      "name": "Additional Skills",
+      "ragStatus": "red",
+      "progressSummary": "Skill expansion audit has not started; no gap analysis or install/test cycle completed yet.",
+      "owner": "Bob",
+      "nextSprintFocus": "Run a capability gap audit and install the highest-value missing skills from ClawHub.",
+      "detailedStatus": "Project is queued with clear steps but no implementation activity yet.",
+      "notes": [
+        "Skill inventory exists, but prioritization by Ani needs is pending."
+      ],
+      "nextSprint": [
+        "Audit current vs available skills.",
+        "Prioritize top 3 missing capabilities.",
+        "Install/test and document in TOOLS.md."
+      ],
+      "blockers": [
+        "No completed needs-based prioritization pass."
+      ],
+      "recommendations": [
+        "Use a simple impact/effort matrix so skill installs are intentional.",
+        "Add acceptance criteria per new skill before installation."
+      ],
+      "backlog": [
+        "Skill health checks and periodic update policy.",
+        "Skill usage analytics in Hive dashboard."
+      ],
+      "lastUpdated": "2026-03-16T14:30:00-05:00"
+    },
+    {
+      "id": "web-youtube-research",
+      "roadmapRef": "Project 5",
+      "name": "Web & YouTube Research",
+      "ragStatus": "amber",
+      "progressSummary": "Web search/fetch is active; YouTube transcript workflow and repeatable research playbooks remain incomplete.",
+      "owner": "Bob",
+      "nextSprintFocus": "Validate summarize skill for YouTube workflows and document reliable research patterns.",
+      "detailedStatus": "Core web tools are online. Remaining work is standardizing end-to-end workflows for video + evidence capture.",
+      "notes": [
+        "Brave search and URL fetch integrations are working.",
+        "Summarize skill is identified as likely YouTube path."
+      ],
+      "nextSprint": [
+        "Run transcript extraction tests on representative YouTube links.",
+        "Document citation-friendly research template."
+      ],
+      "blockers": [
+        "YouTube transcript path not fully validated."
+      ],
+      "recommendations": [
+        "Create a single command checklist for repeatable research runs.",
+        "Track source confidence and freshness in reports."
+      ],
+      "backlog": [
+        "Auto-ingest notable findings into Hive insights panel.",
+        "Research queue prioritization by project criticality."
+      ],
+      "lastUpdated": "2026-03-16T14:35:00-05:00"
+    },
+    {
+      "id": "notion-integration",
+      "roadmapRef": "Project 6",
+      "name": "Notion Integration",
+      "ragStatus": "red",
+      "progressSummary": "Notion integration is still unstarted; no skill/API decision or credential setup has been completed.",
+      "owner": "Bob",
+      "nextSprintFocus": "Confirm integration path and set up secure token handling with a basic read/write smoke test.",
+      "detailedStatus": "Discovery and auth groundwork are pending; no technical implementation yet.",
+      "notes": [
+        "Credential policy requires secure storage (no raw tokens in files)."
+      ],
+      "nextSprint": [
+        "Evaluate ClawHub skill availability.",
+        "If absent, draft direct API approach.",
+        "Test basic read/write against a sandbox page/database."
+      ],
+      "blockers": [
+        "Integration path undecided.",
+        "Credentials not configured."
+      ],
+      "recommendations": [
+        "Start with read-only sync before enabling writes.",
+        "Define explicit use-cases to avoid scope creep."
+      ],
+      "backlog": [
+        "Bi-directional sync with Hive project metadata.",
+        "Notion-backed planning docs surfaced in dashboard."
+      ],
+      "lastUpdated": "2026-03-16T14:40:00-05:00"
+    },
+    {
+      "id": "turnkeylistingmedia-project",
+      "roadmapRef": "Project 7",
+      "name": "TurnkeyListingMedia",
+      "ragStatus": "red",
+      "progressSummary": "Awaiting project briefing and scope confirmation with Ani before execution can begin.",
+      "owner": "Bob + Ani",
+      "nextSprintFocus": "Get briefing, define goals, and open a scoped execution plan.",
+      "detailedStatus": "Project intentionally paused until Ani confirms direction and desired level of involvement.",
+      "notes": [
+        "Business context is personal and requires careful handling."
+      ],
+      "nextSprint": [
+        "Capture current state and pain points.",
+        "Agree on measurable outcomes and timeline."
+      ],
+      "blockers": [
+        "Briefing from Ani pending."
+      ],
+      "recommendations": [
+        "Use a short discovery template to minimize startup drag.",
+        "Separate strategic planning from implementation tasks."
+      ],
+      "backlog": [
+        "Operational dashboard for project KPIs.",
+        "Automated handoff between ops tools and content workflows."
+      ],
+      "lastUpdated": "2026-03-16T14:45:00-05:00"
+    },
+    {
+      "id": "whatsapp-social",
+      "roadmapRef": "Project 8",
+      "name": "WhatsApp Social",
+      "ragStatus": "red",
+      "progressSummary": "Not started; requires setup validation and clear social boundaries before first interactions.",
+      "owner": "Bob",
+      "nextSprintFocus": "Validate wacli setup and align on tone, recipients, and boundaries with Ani.",
+      "detailedStatus": "This is intentionally deprioritized and waiting on direction.",
+      "notes": [
+        "Project is low-priority and social/fun oriented."
+      ],
+      "nextSprint": [
+        "Confirm who is in-scope for outreach.",
+        "Define communication guardrails and tone examples."
+      ],
+      "blockers": [
+        "No target contacts or boundary guidance finalized."
+      ],
+      "recommendations": [
+        "Pilot with one low-risk conversation and review quality before scaling.",
+        "Default to opt-in interactions only."
+      ],
+      "backlog": [
+        "Lightweight social memory preferences per contact.",
+        "Conversation quality feedback loop."
+      ],
+      "lastUpdated": "2026-03-16T14:50:00-05:00"
+    },
+    {
+      "id": "turnkeylistingmedia-website-remake",
+      "roadmapRef": "Project 9",
+      "name": "TurnkeyListingMedia Website Remake",
+      "ragStatus": "red",
+      "progressSummary": "New high-priority initiative with requirements captured; execution has not started yet.",
+      "owner": "Bob + Ani + Forge/Scout",
+      "nextSprintFocus": "Audit current site and lock stack, IA, and migration plan before implementation.",
+      "detailedStatus": "Requirements are clearly defined, including integrations and migration safety constraints. Build phase is pending kickoff.",
+      "notes": [
+        "Preserve key page content while modernizing architecture and workflows.",
+        "No DNS/cutover action without Ani approval."
+      ],
+      "nextSprint": [
+        "Run full current-site audit and asset inventory.",
+        "Define target stack and hosting plan.",
+        "Create sitemap and conversion-focused page structure."
+      ],
+      "blockers": [
+        "No implementation sprint opened yet.",
+        "Stack and integration decisions pending."
+      ],
+      "recommendations": [
+        "Start with staging + migration checklist to de-risk launch.",
+        "Treat pricing + CRM integrations as first-class data models."
+      ],
+      "backlog": [
+        "Owner-editable CMS workflow for pricing and bundles.",
+        "Post-launch analytics + SEO monitoring dashboard."
+      ],
+      "lastUpdated": "2026-03-16T14:55:00-05:00"
+    }
+  ]
+}

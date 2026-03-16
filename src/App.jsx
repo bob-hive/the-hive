@@ -10,6 +10,7 @@ import EscalationsPanel from './components/EscalationsPanel'
 import AlertFeed from './components/AlertFeed'
 import ClawHubPanel from './components/ClawHubPanel'
 import BacklogPanel from './components/BacklogPanel'
+import ProjectsHub from './components/ProjectsHub'
 import Footer from './components/Footer'
 import { ApiError, fetchAuthState, fetchDashboardData } from './data/api'
 import { usePolling } from './hooks/usePolling'
@@ -284,6 +285,8 @@ function Dashboard() {
             </div>
 
             <Trends trends={dashboard.trends} />
+
+            <ProjectsHub />
 
             <BacklogPanel />
 
