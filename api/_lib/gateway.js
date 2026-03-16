@@ -9,20 +9,8 @@
  *   4. Return result and close
  */
 
-import { createRequire } from 'module'
 import { randomUUID } from 'crypto'
-
-const _require = createRequire(import.meta.url)
-
-// Resolve 'ws' — prefer the local dep, fall back to a bare require
-function getWebSocket() {
-  try {
-    return _require('ws')
-  } catch {
-    // Last resort: dynamic import (won't work in all Vercel runtimes but keeps it from crashing at import time)
-    throw new Error('ws package not found — add "ws" to dependencies in package.json')
-  }
-}
+import WebSocketImpl from 'ws'
 
 const CONNECT_TIMEOUT_MS = 10_000
 const REQUEST_TIMEOUT_MS = 15_000
@@ -39,7 +27,7 @@ const PROTOCOL_VERSION = 3
  * @returns {Promise<any>}          RPC result payload
  */
 export async function gatewayRpc({ gatewayUrl, token, method, params = {} }) {
-  const WebSocket = getWebSocket()
+  const WebSocket = WebSocketImpl
 
   return new Promise((resolve, reject) => {
     let ws
