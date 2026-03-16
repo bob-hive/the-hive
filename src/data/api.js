@@ -41,11 +41,16 @@ async function parseErrorBody(res) {
   }
 }
 
-async function apiFetch(path) {
+async function apiFetch(path, init = {}) {
   const url = `${API_BASE}${path}`
   const res = await fetch(url, {
-    headers: apiHeaders(),
+    method: init.method || 'GET',
+    headers: {
+      ...apiHeaders(),
+      ...(init.headers || {}),
+    },
     credentials: 'include',
+    body: init.body,
   })
 
   if (!res.ok) {
@@ -76,6 +81,7 @@ export async function fetchDashboardData() {
 
   const results = await Promise.allSettled([
     apiFetch('/api/alerts'),
+    apiFetch('/api/escalations?openOnly=true'),
     apiFetch('/api/agents/status'),
     apiFetch('/api/agents/activity'),
     apiFetch('/api/sessions'),
@@ -93,16 +99,17 @@ export async function fetchDashboardData() {
     return { ...generateMockDashboardData(), _offline: true }
   }
 
-  const [alertsRes, agentsRes, activityRes, sessionsRes, statsRes, healthRes] = results
+  const [alertsRes, escalationsRes, agentsRes, activityRes, sessionsRes, statsRes, healthRes] = results
 
   const alerts = alertsRes.status === 'fulfilled' ? (alertsRes.value.alerts ?? []) : []
+  const escalations = escalationsRes.status === 'fulfilled' ? (escalationsRes.value.escalations ?? []) : []
   const agents = agentsRes.status === 'fulfilled' ? (agentsRes.value.agents ?? []) : []
   const events = activityRes.status === 'fulfilled' ? (activityRes.value.events ?? []) : []
   const sessions = sessionsRes.status === 'fulfilled' ? (sessionsRes.value.sessions ?? []) : []
   const stats = statsRes.status === 'fulfilled' ? statsRes.value : {}
   const health = healthRes.status === 'fulfilled' ? healthRes.value : {}
 
-  const isMock = Boolean(alertsRes.value?.mock || agentsRes.value?.mock || statsRes.value?.mock)
+  const isMock = Boolean(alertsRes.value?.mock || escalationsRes.value?.mock || agentsRes.value?.mock || statsRes.value?.mock)
   const metrics = {
     tasksCompletedToday: stats.tasksCompletedToday ?? 0,
     activeSessions: stats.activeSessions ?? agents.filter((a) => a.status !== 'idle').length,
@@ -122,6 +129,7 @@ export async function fetchDashboardData() {
     tasks: mockData.tasks,
     trends: mockData.trends,
     alerts: alerts.length > 0 ? alerts : mockData.alerts,
+    escalations,
     sessions,
     metrics,
     alertsMeta: {
@@ -132,9 +140,37 @@ export async function fetchDashboardData() {
       updatedAt: alertsRes.value?.updatedAt || null,
       suppressionStats: alertsRes.value?.suppressionStats || null,
     },
+    escalationsMeta: {
+      source: escalationsRes.value?.source || 'LIVE',
+      updatedAt: escalationsRes.value?.updatedAt || null,
+      ts: escalationsRes.value?.ts || Date.now(),
+      dispatchMode: escalationsRes.value?.dispatchMode || 'dry-run',
+    },
     _offline: false,
     _isMock: isMock,
   }
+}
+
+async function postEscalationAction(escalationId, action, payload = {}) {
+  const id = String(escalationId || '').trim()
+  if (!id) throw new ApiError('Escalation id is required', { code: 'INVALID_ESCALATION_ID' })
+
+  return apiFetch(`/api/escalations/${encodeURIComponent(id)}/${action}`, {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  })
+}
+
+export function acknowledgeEscalation(escalationId, payload = {}) {
+  return postEscalationAction(escalationId, 'ack', payload)
+}
+
+export function resolveEscalation(escalationId, payload = {}) {
+  return postEscalationAction(escalationId, 'resolve', payload)
+}
+
+export function retryEscalationDispatch(escalationId, payload = {}) {
+  return postEscalationAction(escalationId, 'retry', payload)
 }
 
 export { fetchDashboardData as default }

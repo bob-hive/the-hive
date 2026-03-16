@@ -36,6 +36,10 @@ Open `http://localhost:5173` and sign in with an allowed Google account.
 - `HIVE_ALERTS_DIR` (optional alert store path override)
 - `HIVE_ALERT_DEDUPE_WINDOW_MS` (optional dedupe window override)
 - `HIVE_ALERT_SUPPRESS_WINDOW_MS` (optional suppression window override; default 15 min)
+- `HIVE_ESCALATION_DISPATCH_MODE` (`dry-run` default, set `live` to enable outbound dispatch)
+- `HIVE_DASHBOARD_URL` (optional deep-link base URL for escalation payloads)
+- `HIVE_ESCALATION_TELEGRAM_WEBHOOK_URL` + `HIVE_ESCALATION_TELEGRAM_WEBHOOK_TOKEN` (live Ani escalation relay)
+- `HIVE_ESCALATION_TELEGRAM_CHANNEL` (channel metadata for payload routing)
 
 ## Scripts
 

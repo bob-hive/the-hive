@@ -1,155 +1,128 @@
-# Alerts Control Plane (P0.1)
+# Alerts Control Plane (P0.1 → P0.3)
 
-This is the first shipped slice of Hive alert triage: **Signal vs Noise lanes** with persisted ingest/remediation events.
+Hive now ships a minimal but production-usable escalation executor on top of Signal/Noise triage.
 
 ## Scope shipped
 
-- Server-side alert model + store
-- Classification heuristic (confidence + dedupe)
-- API endpoints for ingest/list/remediation
-- Dashboard lane split (Signal top, Noise collapsed)
-- Logging for ingest + remediation events
+- Persistent alerts + remediation attempts
+- Signal/Noise classifier + suppression windows
+- Escalation policy evaluation (`shouldEscalate`, `reason`, `target`)
+- Escalation event state machine + dispatch executor
+- Bob triage queue panel + ack/resolve controls
+- Transition + dispatch audit logs for postmortems
 
 ---
 
 ## Data model
 
+### Alert
+
 Each alert record persists with:
 
-- `id` string
-- `ts` number (unix ms)
-- `source` string
-- `severity` one of `critical|high|warning|medium|low|info`
-- `title` string
-- `message` string
-- `fingerprint` string
-- `confidence` number (0..1)
-- `lane` one of `signal|noise`
-- `status` one of `open|acked|resolved`
-- `projectTags` string[]
-- `agentTags` string[]
-- `remediationAttempts` array
+- `id`, `ts`, `source`, `severity`, `title`, `message`, `fingerprint`
+- `confidence`, `lane`, `status`
+- `projectTags`, `agentTags`, `remediationAttempts[]`
+- `suppressedCount`, `lastSuppressedAt`, `classifyReason`
+- `escalation` summary:
+  - `escalated`
+  - `reason`
+  - `target`
+  - `activeEscalationId`
+  - `activeEscalationState`
+  - `lastTransitionAt`
 
-Additional operational fields:
+### Escalation
 
-- `classifyReason` (why lane chosen)
-- `duplicateInWindow` boolean
-- `createdAt` / `updatedAt` ISO strings
+Escalations persist alongside alerts in the same snapshot:
 
-### Remediation attempt shape
-
-- `id` string
-- `ts` number
-- `actor` string
-- `action` string
-- `outcome` string
-- `success` boolean|null
-- `notes` string
-- `metadata` object
-
----
-
-## Storage + logging
-
-Storage implementation: `api/_lib/alerts-store.js`
-
-- Snapshot file: `alerts.json`
-- Event log: `alerts.events.jsonl`
-
-Path behavior:
-
-- Local/dev: `./data/alerts`
-- Vercel: `/tmp/the-hive-alerts` (ephemeral but writable)
-- Override with `HIVE_ALERTS_DIR`
-
-If disk read/write fails, store falls back to in-memory state (with TODO marker for durable store).
-
-> TODO (production hardening): move to durable external persistence (KV/Postgres/S3), add retention and multi-instance consistency.
+- `id`, `alertId`
+- `state`: `pending -> dispatched -> acknowledged -> resolved` (or `failed`)
+- `target`: `bob | ani`
+- `reason`, `ownership`
+- `createdAt`, `updatedAt`, `dispatchedAt`, `acknowledgedAt`, `resolvedAt`, `failedAt`
+- `dispatch`:
+  - `mode` (`dry-run` or `live`)
+  - `destination`
+  - `payload` (including Telegram-ready payload for Ani target)
+  - `result`
+  - `lastError`
+  - `attempts[]`
+- `transitions[]` with `{ ts, from, to, actor, reason }`
 
 ---
 
-## Classification heuristic
+## Dispatch behavior
 
-Implementation: `api/_lib/alerts-classifier.js`
+Implementation:
 
-### Confidence scoring
+- `api/_lib/escalation-dispatch.js`
+- `api/_lib/alerts-store.js`
 
-- Base score from severity
-- + actionable keyword boost (`error`, `failed`, `timeout`, `oom`, etc.)
-- - transient keyword penalty (`retry`, `flaky`, `temporary`, etc.)
-- - duplicate penalty if same fingerprint in dedupe window
-- Explicit input `confidence` (0..1) overrides heuristic
+Adapter pattern:
 
-### Lane rules
+- **target=bob**
+  - Creates internal queue record (`queue: bob-triage`)
+  - Marked as dispatched
+- **target=ani**
+  - Generates outbound payload suitable for Telegram escalation relay
+  - In `dry-run`: payload logged, not sent
+  - In `live`: POST to configured webhook relay (`HIVE_ESCALATION_TELEGRAM_WEBHOOK_URL`)
 
-- **signal**:
-  - any `critical`, OR
-  - high/warning + actionable text + confidence >= 0.72 and not duplicate
-- **noise**:
-  - duplicate within dedupe window
-  - low confidence / transient patterns
+Safety default:
 
-Dedupe window default: `300000ms` (5 min), configurable by `HIVE_ALERT_DEDUPE_WINDOW_MS`.
+- `HIVE_ESCALATION_DISPATCH_MODE` defaults to `dry-run`
+- Explicit `live` required for external dispatch
+
+> TODO (hardening): add idempotency keys and replay protection for outbound webhook delivery.
 
 ---
 
 ## API
 
-All endpoints keep current auth model:
+Auth model is unchanged: session auth + optional API key for browser, strict API key for machine callers.
 
-- Browser users: signed session + optional `X-Hive-Key` check when configured
-- Machine callers: strict `X-Hive-Key` via `HIVE_API_KEY`
+### Alerts
 
-### `GET /api/alerts`
+- `GET /api/alerts`
+- `POST /api/alerts/ingest`
+- `POST /api/alerts/:id/remediation`
 
-Query params:
+### Escalations
 
-- `lane=signal|noise` (optional)
-- `openOnly=true|false` (optional)
-- `limit=number` (optional)
-
-Response includes `alerts`, `latestTs`, `updatedAt`, and store metadata.
-
-### `POST /api/alerts/ingest`
-
-Body example:
-
-```json
-{
-  "source": "sentinel",
-  "severity": "critical",
-  "title": "Node memory pressure",
-  "message": "node-02 heap OOM during index rebuild",
-  "projectTags": ["the-hive"],
-  "agentTags": ["ledger"]
-}
-```
-
-### `POST /api/alerts/:id/remediation`
-
-Body example:
-
-```json
-{
-  "actor": "forge",
-  "action": "restart_worker",
-  "outcome": "worker restarted and recovered",
-  "success": true,
-  "status": "acked",
-  "notes": "Monitoring next 10 minutes"
-}
-```
+- `GET /api/escalations?state=&target=&openOnly=true|false`
+- `POST /api/escalations/:id/ack`
+- `POST /api/escalations/:id/resolve`
+- `POST /api/escalations/:id/retry`
 
 ---
 
-## Triage workflow (minimal)
+## UI
 
-1. Machine posts alert to `/api/alerts/ingest`.
-2. Backend computes fingerprint, dedupe, confidence, lane.
-3. Dashboard shows:
-   - **Signal lane** first (urgent)
-   - **Noise lane** collapsed summary
-4. Remediation posted to `/api/alerts/:id/remediation`.
-5. Attempt appended to alert and event logged in JSONL.
+Dashboard now renders **Escalations / Bob Queue** above the alerts panel:
 
-This is intentionally lightweight for P0.1 and safe to ship today.
+- shows open escalations, ownership, age, reason
+- exposes ack/resolve buttons
+- exposes retry button for failed dispatches
+- shows current dispatch mode (`dry-run` or `live`)
+
+---
+
+## Logging + postmortem loop
+
+All important transitions are append-only logged in `alerts.events.jsonl`:
+
+- `ingest`
+- `suppressed_ingest`
+- `remediation`
+- `escalation_created`
+- `escalation_dispatch`
+- `escalation_transition`
+
+Postmortem workflow enabled by this log:
+
+1. Reconstruct escalation timeline from `transitions[]` + JSONL events.
+2. Measure dispatch failure rates by target/mode.
+3. Identify stale acknowledgements (time from `dispatched` to `acknowledged`).
+4. Tune escalation policy reason-by-reason (false positive analysis).
+
+> TODO (hardening): ship JSONL to durable analytics store + retention policy + dashboarded SLOs.

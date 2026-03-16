@@ -11,8 +11,9 @@ import {
   findSuppressTarget,
 } from './alerts-classifier.js'
 import { evaluateEscalation } from './escalation-engine.js'
+import { dispatchEscalation, getEscalationDispatchMode } from './escalation-dispatch.js'
 
-const STORE_VERSION = 1
+const STORE_VERSION = 2
 const DEFAULT_BASE_DIR = process.env.VERCEL
   ? '/tmp/the-hive-alerts'
   : path.join(process.cwd(), 'data', 'alerts')
@@ -20,6 +21,8 @@ const DEFAULT_BASE_DIR = process.env.VERCEL
 const BASE_DIR = process.env.HIVE_ALERTS_DIR || DEFAULT_BASE_DIR
 const SNAPSHOT_FILE = path.join(BASE_DIR, 'alerts.json')
 const EVENTS_FILE = path.join(BASE_DIR, 'alerts.events.jsonl')
+
+const ESCALATION_OPEN_STATES = new Set(['pending', 'dispatched', 'acknowledged', 'failed'])
 
 let inMemorySnapshot = createEmptySnapshot()
 let writeQueue = Promise.resolve()
@@ -29,6 +32,20 @@ function createEmptySnapshot() {
     version: STORE_VERSION,
     updatedAt: null,
     alerts: [],
+    escalations: [],
+  }
+}
+
+function normalizeSnapshot(parsed) {
+  if (!parsed || !Array.isArray(parsed.alerts)) {
+    throw new Error('invalid alert store format')
+  }
+
+  return {
+    version: Number(parsed.version) || STORE_VERSION,
+    updatedAt: parsed.updatedAt || null,
+    alerts: parsed.alerts,
+    escalations: Array.isArray(parsed.escalations) ? parsed.escalations : [],
   }
 }
 
@@ -60,6 +77,16 @@ function normalizeSeverity(input) {
   return 'warning'
 }
 
+function normalizeEscalationState(input) {
+  const value = String(input || '').toLowerCase()
+  if (['pending', 'dispatched', 'acknowledged', 'resolved', 'failed'].includes(value)) return value
+  return null
+}
+
+function isEscalationOpen(state) {
+  return ESCALATION_OPEN_STATES.has(String(state || '').toLowerCase())
+}
+
 function resolveEscalation(existingEscalation, policy, atIso) {
   if (!policy.shouldEscalate) {
     return existingEscalation && existingEscalation.escalated
@@ -69,6 +96,9 @@ function resolveEscalation(existingEscalation, policy, atIso) {
           reason: '',
           target: 'bob',
           at: null,
+          activeEscalationId: null,
+          activeEscalationState: null,
+          lastTransitionAt: null,
         }
   }
 
@@ -77,6 +107,9 @@ function resolveEscalation(existingEscalation, policy, atIso) {
     reason: policy.reason,
     target: policy.target,
     at: existingEscalation?.at || atIso,
+    activeEscalationId: existingEscalation?.activeEscalationId || null,
+    activeEscalationState: existingEscalation?.activeEscalationState || null,
+    lastTransitionAt: existingEscalation?.lastTransitionAt || atIso,
   }
 }
 
@@ -98,6 +131,85 @@ function summarizeSuppression(alerts) {
   }
 }
 
+function createEscalationRecord(alert, policy, atIso, actor = 'system') {
+  return {
+    id: uid('esc'),
+    alertId: alert.id,
+    state: 'pending',
+    target: policy.target,
+    reason: policy.reason,
+    ownership: policy.target,
+    createdAt: atIso,
+    updatedAt: atIso,
+    dispatchedAt: null,
+    acknowledgedAt: null,
+    resolvedAt: null,
+    failedAt: null,
+    dispatch: {
+      mode: getEscalationDispatchMode(),
+      attempts: [],
+      lastError: null,
+      payload: null,
+      destination: null,
+      result: null,
+      queueRecord: null,
+    },
+    transitions: [
+      {
+        ts: atIso,
+        from: null,
+        to: 'pending',
+        actor,
+        reason: 'policy_triggered',
+      },
+    ],
+  }
+}
+
+function applyEscalationTransition(escalation, { to, actor = 'system', reason = '' }, tsIso) {
+  const from = escalation.state
+  const transitions = [
+    ...(Array.isArray(escalation.transitions) ? escalation.transitions : []),
+    {
+      ts: tsIso,
+      from,
+      to,
+      actor,
+      reason,
+    },
+  ]
+
+  return {
+    ...escalation,
+    state: to,
+    updatedAt: tsIso,
+    dispatchedAt: to === 'dispatched' ? tsIso : escalation.dispatchedAt,
+    acknowledgedAt: to === 'acknowledged' ? tsIso : escalation.acknowledgedAt,
+    resolvedAt: to === 'resolved' ? tsIso : escalation.resolvedAt,
+    failedAt: to === 'failed' ? tsIso : escalation.failedAt,
+    transitions,
+  }
+}
+
+function syncAlertEscalation(alert, escalation, stamp) {
+  if (!alert) return alert
+
+  return {
+    ...alert,
+    updatedAt: stamp,
+    escalation: {
+      ...(alert.escalation || {}),
+      escalated: true,
+      reason: escalation.reason,
+      target: escalation.target,
+      at: alert.escalation?.at || escalation.createdAt || stamp,
+      activeEscalationId: escalation.id,
+      activeEscalationState: escalation.state,
+      lastTransitionAt: stamp,
+    },
+  }
+}
+
 async function ensureStoreDir() {
   await fs.mkdir(BASE_DIR, { recursive: true })
 }
@@ -106,8 +218,7 @@ async function readSnapshotFromDisk() {
   try {
     const raw = await fs.readFile(SNAPSHOT_FILE, 'utf8')
     const parsed = JSON.parse(raw)
-    if (!parsed || !Array.isArray(parsed.alerts)) throw new Error('invalid alert store format')
-    return parsed
+    return normalizeSnapshot(parsed)
   } catch (error) {
     if (error?.code === 'ENOENT') return createEmptySnapshot()
     throw error
@@ -154,6 +265,141 @@ async function withSnapshotMutate(mutator) {
   })
 }
 
+async function dispatchPendingEscalation({ snapshot, escalation, alert, reason = 'policy_dispatch' }) {
+  const ts = nowIso()
+  const attempt = {
+    id: uid('disp'),
+    ts,
+    mode: getEscalationDispatchMode(),
+    status: 'pending',
+    target: escalation.target,
+  }
+
+  let nextEscalation = escalation
+  try {
+    const dispatchResult = await dispatchEscalation(escalation, alert)
+
+    attempt.status = 'success'
+    attempt.destination = dispatchResult.destination
+    attempt.payload = dispatchResult.payload
+    attempt.result = dispatchResult.result
+
+    nextEscalation = applyEscalationTransition(escalation, {
+      to: 'dispatched',
+      actor: 'system',
+      reason,
+    }, ts)
+
+    nextEscalation = {
+      ...nextEscalation,
+      dispatch: {
+        ...(nextEscalation.dispatch || {}),
+        mode: dispatchResult.mode,
+        destination: dispatchResult.destination,
+        payload: dispatchResult.payload,
+        result: dispatchResult.result,
+        queueRecord: dispatchResult.payload?.queueRecord || nextEscalation.dispatch?.queueRecord || null,
+        lastError: null,
+        attempts: [...(nextEscalation.dispatch?.attempts || []), attempt],
+      },
+    }
+  } catch (error) {
+    attempt.status = 'failed'
+    attempt.error = error.message || 'dispatch_failed'
+
+    nextEscalation = applyEscalationTransition(escalation, {
+      to: 'failed',
+      actor: 'system',
+      reason: `dispatch_failed:${attempt.error}`,
+    }, ts)
+
+    nextEscalation = {
+      ...nextEscalation,
+      dispatch: {
+        ...(nextEscalation.dispatch || {}),
+        lastError: attempt.error,
+        attempts: [...(nextEscalation.dispatch?.attempts || []), attempt],
+      },
+    }
+  }
+
+  const nextEscalations = snapshot.escalations.map((entry) => (entry.id === escalation.id ? nextEscalation : entry))
+  const nextAlerts = snapshot.alerts.map((entry) => {
+    if (entry.id !== alert.id) return entry
+    return syncAlertEscalation(entry, nextEscalation, ts)
+  })
+
+  await appendEvent({
+    eventType: 'escalation_dispatch',
+    eventTs: ts,
+    escalationId: escalation.id,
+    alertId: alert.id,
+    state: nextEscalation.state,
+    target: nextEscalation.target,
+    reason,
+    dispatch: {
+      mode: attempt.mode,
+      status: attempt.status,
+      destination: attempt.destination || null,
+      error: attempt.error || null,
+    },
+  })
+
+  return {
+    ...snapshot,
+    updatedAt: ts,
+    alerts: nextAlerts,
+    escalations: nextEscalations,
+  }
+}
+
+async function ensureEscalationForAlert(snapshot, alert, escalationPolicy, { actor = 'system' } = {}) {
+  if (!escalationPolicy?.shouldEscalate) return snapshot
+
+  const existingOpen = snapshot.escalations.find((entry) => {
+    if (entry.alertId !== alert.id) return false
+    if (entry.target !== escalationPolicy.target) return false
+    if (entry.reason !== escalationPolicy.reason) return false
+    return isEscalationOpen(entry.state)
+  })
+
+  if (existingOpen) {
+    return snapshot
+  }
+
+  const stamp = nowIso()
+  const created = createEscalationRecord(alert, escalationPolicy, stamp, actor)
+  let nextSnapshot = {
+    ...snapshot,
+    updatedAt: stamp,
+    escalations: [created, ...snapshot.escalations],
+    alerts: snapshot.alerts.map((entry) => {
+      if (entry.id !== alert.id) return entry
+      return syncAlertEscalation(entry, created, stamp)
+    }),
+  }
+
+  await appendEvent({
+    eventType: 'escalation_created',
+    eventTs: stamp,
+    escalationId: created.id,
+    alertId: alert.id,
+    target: created.target,
+    reason: created.reason,
+    state: created.state,
+    actor,
+  })
+
+  nextSnapshot = await dispatchPendingEscalation({
+    snapshot: nextSnapshot,
+    escalation: created,
+    alert,
+    reason: 'policy_dispatch',
+  })
+
+  return nextSnapshot
+}
+
 export async function listAlerts({ lane, openOnly = false, limit = 200 } = {}) {
   let snapshot
 
@@ -182,6 +428,55 @@ export async function listAlerts({ lane, openOnly = false, limit = 200 } = {}) {
     suppressionStats: summarizeSuppression(snapshot.alerts),
     mock: false,
     source: process.env.VERCEL ? 'LIVE_TMP' : 'LIVE_LOCAL',
+  }
+}
+
+export async function listEscalations({ state, target, openOnly = false, limit = 200 } = {}) {
+  let snapshot
+
+  try {
+    snapshot = await readSnapshotFromDisk()
+    inMemorySnapshot = snapshot
+  } catch (error) {
+    console.warn('[alerts-store] listEscalations disk read failed, serving in-memory snapshot:', error.message)
+    snapshot = inMemorySnapshot
+  }
+
+  const stateFilter = normalizeEscalationState(state)
+  const targetFilter = target ? String(target).toLowerCase() : null
+
+  const enriched = snapshot.escalations.map((entry) => {
+    const alert = snapshot.alerts.find((alertItem) => alertItem.id === entry.alertId) || null
+    return {
+      ...entry,
+      alert: alert
+        ? {
+            id: alert.id,
+            severity: alert.severity,
+            source: alert.source,
+            title: alert.title || alert.message,
+            ts: alert.ts,
+            status: alert.status,
+          }
+        : null,
+    }
+  })
+
+  const escalations = enriched
+    .filter((entry) => {
+      if (stateFilter && entry.state !== stateFilter) return false
+      if (targetFilter && entry.target !== targetFilter) return false
+      if (openOnly && entry.state === 'resolved') return false
+      return true
+    })
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime())
+    .slice(0, Math.max(1, Math.min(Number(limit) || 200, 1000)))
+
+  return {
+    escalations,
+    updatedAt: snapshot.updatedAt,
+    source: process.env.VERCEL ? 'LIVE_TMP' : 'LIVE_LOCAL',
+    dispatchMode: getEscalationDispatchMode(),
   }
 }
 
@@ -271,7 +566,7 @@ export async function ingestAlert(input, meta = {}) {
 
         nextAlerts[suppressIndex] = updatedAlert
 
-        const next = {
+        let next = {
           ...snapshot,
           updatedAt: now,
           alerts: nextAlerts,
@@ -289,6 +584,7 @@ export async function ingestAlert(input, meta = {}) {
           escalation: updatedAlert.escalation,
         })
 
+        next = await ensureEscalationForAlert(next, updatedAlert, escalationPolicy)
         return next
       }
     }
@@ -340,7 +636,7 @@ export async function ingestAlert(input, meta = {}) {
       escalation: resolveEscalation(null, escalationPolicy, now),
     }
 
-    const next = {
+    let next = {
       ...snapshot,
       updatedAt: now,
       alerts: [alert, ...snapshot.alerts],
@@ -355,6 +651,7 @@ export async function ingestAlert(input, meta = {}) {
       alert,
     })
 
+    next = await ensureEscalationForAlert(next, alert, escalationPolicy)
     return next
   }).then((snapshot) => {
     const alert = snapshot.alerts.find((entry) => entry.id === selectedAlertId) || snapshot.alerts[0] || null
@@ -412,7 +709,7 @@ export async function appendRemediationAttempt(alertId, attemptInput = {}, meta 
 
     nextAlerts[index] = updatedAlert
 
-    const next = {
+    let next = {
       ...snapshot,
       updatedAt: stamp,
       alerts: nextAlerts,
@@ -428,10 +725,207 @@ export async function appendRemediationAttempt(alertId, attemptInput = {}, meta 
       escalation: updatedAlert.escalation,
     })
 
+    next = await ensureEscalationForAlert(next, updatedAlert, escalationPolicy, {
+      actor: attempt.actor || 'system',
+    })
+
     return next
   }).then((snapshot) => {
     const alert = snapshot.alerts.find((entry) => entry.id === id)
     return { alert, updatedAt: snapshot.updatedAt }
+  })
+}
+
+function parseEscalationActor(actorInput) {
+  const actor = String(actorInput || '').trim()
+  return actor || 'system'
+}
+
+export async function ackEscalation(escalationId, { actor = 'system', reason = 'acknowledged' } = {}) {
+  const id = String(escalationId || '').trim()
+  if (!id) throw new Error('escalation id is required')
+
+  return withSnapshotMutate(async (snapshot) => {
+    const index = snapshot.escalations.findIndex((entry) => entry.id === id)
+    if (index < 0) {
+      const error = new Error('Escalation not found')
+      error.code = 'ESCALATION_NOT_FOUND'
+      throw error
+    }
+
+    const current = snapshot.escalations[index]
+    if (current.state === 'resolved') {
+      const error = new Error('Resolved escalation cannot be acknowledged')
+      error.code = 'ESCALATION_INVALID_STATE'
+      throw error
+    }
+
+    const stamp = nowIso()
+    const updated = applyEscalationTransition(current, {
+      to: 'acknowledged',
+      actor: parseEscalationActor(actor),
+      reason: String(reason || 'acknowledged').trim(),
+    }, stamp)
+
+    const nextEscalations = [...snapshot.escalations]
+    nextEscalations[index] = updated
+
+    const nextAlerts = snapshot.alerts.map((entry) => {
+      if (entry.id !== updated.alertId) return entry
+      const ackedStatus = entry.status === 'resolved' ? 'resolved' : 'acked'
+      return {
+        ...syncAlertEscalation(entry, updated, stamp),
+        status: ackedStatus,
+      }
+    })
+
+    await appendEvent({
+      eventType: 'escalation_transition',
+      eventTs: stamp,
+      escalationId: updated.id,
+      alertId: updated.alertId,
+      from: current.state,
+      to: updated.state,
+      actor: parseEscalationActor(actor),
+      reason,
+    })
+
+    return {
+      ...snapshot,
+      updatedAt: stamp,
+      alerts: nextAlerts,
+      escalations: nextEscalations,
+    }
+  }).then((snapshot) => {
+    const escalation = snapshot.escalations.find((entry) => entry.id === id) || null
+    return { escalation, updatedAt: snapshot.updatedAt }
+  })
+}
+
+export async function resolveEscalationById(escalationId, { actor = 'system', reason = 'resolved' } = {}) {
+  const id = String(escalationId || '').trim()
+  if (!id) throw new Error('escalation id is required')
+
+  return withSnapshotMutate(async (snapshot) => {
+    const index = snapshot.escalations.findIndex((entry) => entry.id === id)
+    if (index < 0) {
+      const error = new Error('Escalation not found')
+      error.code = 'ESCALATION_NOT_FOUND'
+      throw error
+    }
+
+    const current = snapshot.escalations[index]
+    if (current.state === 'resolved') {
+      return snapshot
+    }
+
+    const stamp = nowIso()
+    const updated = applyEscalationTransition(current, {
+      to: 'resolved',
+      actor: parseEscalationActor(actor),
+      reason: String(reason || 'resolved').trim(),
+    }, stamp)
+
+    const nextEscalations = [...snapshot.escalations]
+    nextEscalations[index] = updated
+
+    const nextAlerts = snapshot.alerts.map((entry) => {
+      if (entry.id !== updated.alertId) return entry
+
+      return {
+        ...syncAlertEscalation(entry, updated, stamp),
+        status: 'resolved',
+      }
+    })
+
+    await appendEvent({
+      eventType: 'escalation_transition',
+      eventTs: stamp,
+      escalationId: updated.id,
+      alertId: updated.alertId,
+      from: current.state,
+      to: updated.state,
+      actor: parseEscalationActor(actor),
+      reason,
+    })
+
+    return {
+      ...snapshot,
+      updatedAt: stamp,
+      alerts: nextAlerts,
+      escalations: nextEscalations,
+    }
+  }).then((snapshot) => {
+    const escalation = snapshot.escalations.find((entry) => entry.id === id) || null
+    return { escalation, updatedAt: snapshot.updatedAt }
+  })
+}
+
+export async function retryEscalation(escalationId, { actor = 'system', reason = 'manual_retry' } = {}) {
+  const id = String(escalationId || '').trim()
+  if (!id) throw new Error('escalation id is required')
+
+  return withSnapshotMutate(async (snapshot) => {
+    const index = snapshot.escalations.findIndex((entry) => entry.id === id)
+    if (index < 0) {
+      const error = new Error('Escalation not found')
+      error.code = 'ESCALATION_NOT_FOUND'
+      throw error
+    }
+
+    const current = snapshot.escalations[index]
+    if (current.state !== 'failed') {
+      const error = new Error('Only failed escalations can be retried')
+      error.code = 'ESCALATION_INVALID_STATE'
+      throw error
+    }
+
+    const alert = snapshot.alerts.find((entry) => entry.id === current.alertId)
+    if (!alert) {
+      const error = new Error('Escalation alert context missing')
+      error.code = 'ESCALATION_ALERT_MISSING'
+      throw error
+    }
+
+    const stamp = nowIso()
+    const pending = applyEscalationTransition(current, {
+      to: 'pending',
+      actor: parseEscalationActor(actor),
+      reason: String(reason || 'manual_retry').trim(),
+    }, stamp)
+
+    let nextSnapshot = {
+      ...snapshot,
+      updatedAt: stamp,
+      alerts: snapshot.alerts.map((entry) => {
+        if (entry.id !== alert.id) return entry
+        return syncAlertEscalation(entry, pending, stamp)
+      }),
+      escalations: snapshot.escalations.map((entry) => (entry.id === current.id ? pending : entry)),
+    }
+
+    await appendEvent({
+      eventType: 'escalation_transition',
+      eventTs: stamp,
+      escalationId: pending.id,
+      alertId: pending.alertId,
+      from: current.state,
+      to: pending.state,
+      actor: parseEscalationActor(actor),
+      reason,
+    })
+
+    nextSnapshot = await dispatchPendingEscalation({
+      snapshot: nextSnapshot,
+      escalation: pending,
+      alert,
+      reason: 'manual_retry_dispatch',
+    })
+
+    return nextSnapshot
+  }).then((snapshot) => {
+    const escalation = snapshot.escalations.find((entry) => entry.id === id) || null
+    return { escalation, updatedAt: snapshot.updatedAt }
   })
 }
 
@@ -442,6 +936,7 @@ export function alertStoreInfo() {
     eventsFile: EVENTS_FILE,
     dedupeWindowMs: getDedupeWindowMs(),
     suppressWindowMs: getSuppressWindowMs(),
+    dispatchMode: getEscalationDispatchMode(),
     durability: process.env.VERCEL
       ? 'ephemeral_file_store_/tmp (serverless-safe but not durable)'
       : 'local_file_store',

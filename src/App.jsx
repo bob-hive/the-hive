@@ -6,6 +6,7 @@ import Trends from './components/Trends'
 import AgentGrid from './components/AgentGrid'
 import LiveFeed from './components/LiveFeed'
 import Timeline from './components/Timeline'
+import EscalationsPanel from './components/EscalationsPanel'
 import AlertFeed from './components/AlertFeed'
 import ClawHubPanel from './components/ClawHubPanel'
 import BacklogPanel from './components/BacklogPanel'
@@ -190,6 +191,7 @@ function Dashboard() {
     tasks: [],
     events: [],
     alerts: [],
+    escalations: [],
     trends: [],
     sessions: [],
     alertsMeta: {
@@ -198,6 +200,12 @@ function Dashboard() {
       latestTs: 0,
       ts: 0,
       updatedAt: null,
+    },
+    escalationsMeta: {
+      source: 'LIVE',
+      updatedAt: null,
+      ts: 0,
+      dispatchMode: 'dry-run',
     },
     metrics: {
       tasksCompletedToday: 0,
@@ -258,6 +266,12 @@ function Dashboard() {
           </div>
         ) : (
           <>
+            <EscalationsPanel
+              escalations={dashboard.escalations}
+              meta={dashboard.escalationsMeta}
+              onRefresh={refresh}
+            />
+
             <AlertFeed alerts={dashboard.alerts} meta={dashboard.alertsMeta} />
 
             <MetricsBar metrics={dashboard.metrics} />
