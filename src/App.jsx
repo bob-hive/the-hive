@@ -7,6 +7,7 @@ import LiveFeed from './components/LiveFeed'
 import Timeline from './components/Timeline'
 import AlertFeed from './components/AlertFeed'
 import ClawHubPanel from './components/ClawHubPanel'
+import BacklogPanel from './components/BacklogPanel'
 import Footer from './components/Footer'
 import { ApiError, fetchAuthState, fetchDashboardData } from './data/api'
 import { usePolling } from './hooks/usePolling'
@@ -222,6 +223,8 @@ function Dashboard() {
             </div>
 
             <Trends trends={dashboard.trends} />
+
+            <BacklogPanel />
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <AlertFeed alerts={dashboard.alerts} />

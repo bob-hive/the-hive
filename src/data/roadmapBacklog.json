@@ -1,0 +1,31 @@
+{
+  "project": "Project 3 · The Hive",
+  "title": "Backlog / Discuss with Ani",
+  "description": "Roadmap candidates queued for planning and prioritization.",
+  "items": [
+    {
+      "id": "ui-inspiration-pass",
+      "title": "agentclaw.space UI inspiration pass",
+      "detail": "Capture reusable layout + interaction ideas for The Hive dashboard evolution.",
+      "tag": "Design"
+    },
+    {
+      "id": "project-status-board",
+      "title": "Project status visual board",
+      "detail": "Add a lightweight visual board for in-flight, blocked, and completed project tracks.",
+      "tag": "Product"
+    },
+    {
+      "id": "agent-profiles-integrations",
+      "title": "Agent profiles + integration capabilities",
+      "detail": "Expose each agent's role, tools, and connected integrations in one view.",
+      "tag": "Platform"
+    },
+    {
+      "id": "specialized-agent-designer",
+      "title": "Specialized agent/task designer (cruise deal hunter workflow)",
+      "detail": "Prototype a guided workflow builder for narrowly scoped, high-ROI automation tasks.",
+      "tag": "Workflow"
+    }
+  ]
+}
