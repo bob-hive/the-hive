@@ -4,6 +4,7 @@ This phase gates **both UI and API** behind Google sign-in and an email allowlis
 
 - Dashboard access requires a valid session cookie (`hive_session`)
 - API routes require the same session cookie
+- Exception: `/api/health` also allows machine checks with `X-Hive-Key` (`HIVE_API_KEY`)
 - Sensitive routes still enforce `HIVE_API_KEY` where already used (defense in depth)
 - Allowlist is env-driven and defaults to one user
 

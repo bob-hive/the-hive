@@ -228,7 +228,21 @@ export function checkHiveApiKey(req) {
   if (!expectedKey) return true
 
   const provided = (req.headers['x-hive-key'] || '').trim()
-  return provided === expectedKey
+  if (!provided) return false
+  return timingSafeEqualString(provided, expectedKey)
+}
+
+/**
+ * Strict API key check (requires configured key + provided header match).
+ * Use for machine-to-machine endpoints that should work without user session.
+ */
+export function hasStrictHiveApiKey(req) {
+  const expectedKey = process.env.HIVE_API_KEY?.trim()
+  if (!expectedKey) return false
+
+  const provided = (req.headers['x-hive-key'] || '').trim()
+  if (!provided) return false
+  return timingSafeEqualString(provided, expectedKey)
 }
 
 export function corsHeaders() {

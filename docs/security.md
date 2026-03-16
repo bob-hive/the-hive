@@ -21,11 +21,15 @@ Default allowlist value: `singh.anirudh@gmail.com`
 - `GET|POST /api/auth/logout` — clears session cookie
 
 ### Session-protected routes
-- `GET /api/health`
 - `GET /api/stats`
 - `GET /api/sessions`
 - `GET /api/agents/status`
 - `GET /api/agents/activity`
+
+### Hybrid auth route
+- `GET /api/health`
+  - allows **either** valid user session cookie, **or** valid `X-Hive-Key` matching `HIVE_API_KEY`
+  - response is sanitized (only top-level health + channel ok booleans)
 
 ### Defense in depth: API key
 These sensitive routes still keep `HIVE_API_KEY` checks (`X-Hive-Key`) where already present:

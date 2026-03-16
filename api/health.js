@@ -3,12 +3,19 @@
  * Returns gateway health status — sanitized, no metadata.
  * Proxies to OpenClaw gateway `health` RPC method.
  *
- * Public endpoint — no API key required.
+ * Access rules:
+ * - Browser users: valid signed session cookie
+ * - Machine checks: valid X-Hive-Key matching HIVE_API_KEY
  */
 
 import { tryGatewayRpc, getGatewayConfig } from './_lib/gateway.js'
 import { getMockHealth } from './_lib/mock.js'
-import { jsonResponse, corsHeaders, requireUserSession } from './_lib/auth.js'
+import {
+  jsonResponse,
+  corsHeaders,
+  requireUserSession,
+  hasStrictHiveApiKey,
+} from './_lib/auth.js'
 
 /**
  * Sanitize health response: strip bot usernames, IDs, application details.
@@ -53,7 +60,8 @@ export default async function handler(req, res) {
     return res.status(204).end()
   }
 
-  if (!requireUserSession(req, res)) return
+  const hasMachineKey = hasStrictHiveApiKey(req)
+  if (!hasMachineKey && !requireUserSession(req, res)) return
 
   const isMock = !getGatewayConfig()
 
