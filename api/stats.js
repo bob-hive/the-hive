@@ -7,7 +7,7 @@
 
 import { tryGatewayRpc, getGatewayConfig } from './_lib/gateway.js'
 import { getMockStats } from './_lib/mock.js'
-import { jsonResponse, corsHeaders } from './_lib/auth.js'
+import { jsonResponse, corsHeaders, requireUserSession } from './_lib/auth.js'
 
 function formatUptime(ms) {
   if (!ms || ms < 0) return '—'
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     return res.status(204).end()
   }
 
-  // Stats is a public endpoint — no API key check
+  if (!requireUserSession(req, res)) return
 
   const isMock = !getGatewayConfig()
 

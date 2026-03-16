@@ -7,7 +7,7 @@
 
 import { tryGatewayRpc, getGatewayConfig } from '../_lib/gateway.js'
 import { getMockActivity } from '../_lib/mock.js'
-import { checkHiveApiKey, jsonResponse, unauthorizedResponse, corsHeaders } from '../_lib/auth.js'
+import { checkHiveApiKey, jsonResponse, unauthorizedResponse, corsHeaders, requireUserSession } from '../_lib/auth.js'
 
 /** Parse agentId from a session. Prefer explicit field, then parse from key. */
 function agentIdFromSession(session) {
@@ -79,6 +79,8 @@ export default async function handler(req, res) {
     Object.entries(corsHeaders()).forEach(([k, v]) => res.setHeader(k, v))
     return res.status(204).end()
   }
+
+  if (!requireUserSession(req, res)) return
 
   if (!checkHiveApiKey(req)) return unauthorizedResponse(res)
 

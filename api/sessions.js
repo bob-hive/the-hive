@@ -7,7 +7,7 @@
 
 import { tryGatewayRpc, getGatewayConfig } from './_lib/gateway.js'
 import { getMockSessions } from './_lib/mock.js'
-import { checkHiveApiKey, jsonResponse, unauthorizedResponse, corsHeaders } from './_lib/auth.js'
+import { checkHiveApiKey, jsonResponse, unauthorizedResponse, corsHeaders, requireUserSession } from './_lib/auth.js'
 
 function normaliseSession(s) {
   const key = s.key || s.sessionKey || ''
@@ -36,6 +36,8 @@ export default async function handler(req, res) {
     Object.entries(corsHeaders()).forEach(([k, v]) => res.setHeader(k, v))
     return res.status(204).end()
   }
+
+  if (!requireUserSession(req, res)) return
 
   if (!checkHiveApiKey(req)) return unauthorizedResponse(res)
 

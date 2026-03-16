@@ -3,10 +3,6 @@
  *
  * All data requests go through /api/* routes (serverless functions).
  * In MOCK_MODE or when the API is unreachable, falls back to mock data.
- *
- * Set VITE_MOCK_MODE=true in .env to force mock mode.
- * Set VITE_HIVE_API_KEY=<key> to send the X-Hive-Key header.
- * Set VITE_API_BASE_URL if the API lives elsewhere (e.g. proxy in dev).
  */
 
 import { generateMockDashboardData } from './mock.js'
@@ -15,37 +11,70 @@ const MOCK_MODE = import.meta.env.VITE_MOCK_MODE === 'true'
 const API_KEY = import.meta.env.VITE_HIVE_API_KEY || ''
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 
-/** Default headers for all API requests */
+export class ApiError extends Error {
+  constructor(message, { status = 0, code = 'API_ERROR' } = {}) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+  }
+}
+
 function apiHeaders() {
   const headers = { 'Content-Type': 'application/json' }
   if (API_KEY) headers['X-Hive-Key'] = API_KEY
   return headers
 }
 
-/** Fetch a JSON API route, throwing on non-2xx */
+async function parseErrorBody(res) {
+  const text = await res.text().catch(() => '')
+  if (!text) return { message: res.statusText || 'Request failed', code: 'API_ERROR' }
+
+  try {
+    const parsed = JSON.parse(text)
+    return {
+      message: parsed.error || parsed.message || text,
+      code: parsed.code || 'API_ERROR',
+    }
+  } catch {
+    return { message: text, code: 'API_ERROR' }
+  }
+}
+
 async function apiFetch(path) {
   const url = `${API_BASE}${path}`
-  const res = await fetch(url, { headers: apiHeaders() })
+  const res = await fetch(url, {
+    headers: apiHeaders(),
+    credentials: 'include',
+  })
+
   if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`API ${res.status}: ${text || res.statusText}`)
+    const err = await parseErrorBody(res)
+    throw new ApiError(err.message, {
+      status: res.status,
+      code: err.code,
+    })
   }
+
   return res.json()
 }
 
-/**
- * Fetch all dashboard data in one go.
- * Returns the same shape as `generateMockDashboardData()`.
- */
+export async function fetchAuthState() {
+  const data = await apiFetch('/api/auth/me')
+  return data
+}
+
+function isAuthError(reason) {
+  return reason instanceof ApiError && (reason.status === 401 || reason.status === 403)
+}
+
 export async function fetchDashboardData() {
   if (MOCK_MODE) {
-    // Slight delay to simulate network round-trip in dev
     await new Promise((r) => setTimeout(r, 120))
     return generateMockDashboardData()
   }
 
-  // Fan out all API calls in parallel
-  const [agentsRes, activityRes, sessionsRes, statsRes, healthRes] = await Promise.allSettled([
+  const results = await Promise.allSettled([
     apiFetch('/api/agents/status'),
     apiFetch('/api/agents/activity'),
     apiFetch('/api/sessions'),
@@ -53,14 +82,17 @@ export async function fetchDashboardData() {
     apiFetch('/api/health'),
   ])
 
-  // If all calls failed, fall back to mock entirely
-  const allFailed = [agentsRes, activityRes, sessionsRes, statsRes, healthRes].every(
-    (r) => r.status === 'rejected'
-  )
-  if (allFailed) {
+  const allRejected = results.every((r) => r.status === 'rejected')
+
+  if (allRejected) {
+    const authFailure = results.find((r) => r.status === 'rejected' && isAuthError(r.reason))
+    if (authFailure) throw authFailure.reason
+
     console.warn('[hive] all API calls failed, falling back to mock data')
     return { ...generateMockDashboardData(), _offline: true }
   }
+
+  const [agentsRes, activityRes, sessionsRes, statsRes, healthRes] = results
 
   const agents = agentsRes.status === 'fulfilled' ? (agentsRes.value.agents ?? []) : []
   const events = activityRes.status === 'fulfilled' ? (activityRes.value.events ?? []) : []
@@ -68,10 +100,7 @@ export async function fetchDashboardData() {
   const stats = statsRes.status === 'fulfilled' ? statsRes.value : {}
   const health = healthRes.status === 'fulfilled' ? healthRes.value : {}
 
-  // Determine if at least some API calls succeeded
   const isMock = agentsRes.value?.mock || statsRes.value?.mock
-
-  // Build metrics from stats API response
   const metrics = {
     tasksCompletedToday: stats.tasksCompletedToday ?? 0,
     activeSessions: stats.activeSessions ?? agents.filter((a) => a.status !== 'idle').length,
@@ -83,15 +112,14 @@ export async function fetchDashboardData() {
     _isMock: isMock,
   }
 
-  // Build trends (no direct API for this yet — use placeholder data)
   const mockData = generateMockDashboardData()
 
   return {
     agents: agents.length > 0 ? agents : mockData.agents,
     events: events.length > 0 ? events : mockData.events,
-    tasks: mockData.tasks,       // TODO: tasks API endpoint
-    trends: mockData.trends,     // TODO: trends API endpoint
-    alerts: mockData.alerts,     // TODO: alerts API endpoint
+    tasks: mockData.tasks,
+    trends: mockData.trends,
+    alerts: mockData.alerts,
     sessions,
     metrics,
     _offline: false,
@@ -99,5 +127,4 @@ export async function fetchDashboardData() {
   }
 }
 
-/** Alias for backward compatibility with usePolling(fetchDashboardData) */
 export { fetchDashboardData as default }

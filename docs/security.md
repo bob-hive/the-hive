@@ -1,43 +1,57 @@
 # The Hive — Security Model
 
-## API Authentication Strategy
+## Auth model (Phase 1)
 
-### Public endpoints (no API key required)
-- `GET /api/health` — sanitized status only (no bot metadata)
-- `GET /api/stats` — aggregate statistics
+The Hive now uses **Google OAuth + signed cookie sessions** for both UI and API access.
 
-### Protected endpoints (require `HIVE_API_KEY`)
-- `GET /api/sessions` — session data with costs, models, keys
-- `GET /api/agents/status` — agent status and task details
-- `GET /api/agents/activity` — activity feed with session details
+- Browser signs in at `/api/auth/login`
+- OAuth callback at `/api/auth/callback` creates `hive_session` cookie
+- Dashboard checks `/api/auth/me` before rendering
+- Protected API routes require a valid session
+- Email allowlist enforced via `HIVE_ALLOWED_EMAILS`
 
-### Why not protect everything?
-The frontend is a public SPA. Any API key embedded in `VITE_*` env vars is visible in the browser bundle. Protecting public endpoints with a key that's exposed in the client JS provides no real security — it's security theater.
+Default allowlist value: `singh.anirudh@gmail.com`
 
-Instead:
-- **Public endpoints** return only non-sensitive, aggregate data
-- **Protected endpoints** require `HIVE_API_KEY` sent via `X-Hive-Key` header
-- The API key is stored server-side only (`HIVE_API_KEY` env var in Vercel)
-- The frontend sends `VITE_HIVE_API_KEY` if configured, but this is optional
+## API route protection
 
-For production use where sessions/activity should also be visible on the dashboard, either:
-1. Accept that this data is semi-public (it's operational metadata, not secrets)
-2. Add a proper auth layer (OAuth, session cookies) for the dashboard
+### Auth routes
+- `GET /api/auth/login` — starts Google OAuth
+- `GET /api/auth/callback` — validates Google token, sets session cookie
+- `GET /api/auth/me` — returns auth state (`200`, `401`, or `403`)
+- `GET|POST /api/auth/logout` — clears session cookie
+
+### Session-protected routes
+- `GET /api/health`
+- `GET /api/stats`
+- `GET /api/sessions`
+- `GET /api/agents/status`
+- `GET /api/agents/activity`
+
+### Defense in depth: API key
+These sensitive routes still keep `HIVE_API_KEY` checks (`X-Hive-Key`) where already present:
+- `GET /api/sessions`
+- `GET /api/agents/status`
+- `GET /api/agents/activity`
+
+So callers need both:
+1) valid signed user session cookie, and
+2) matching API key header (if `HIVE_API_KEY` is set)
+
+## Cookie/session hardening
+
+- Session and OAuth state are signed with `HIVE_AUTH_SECRET` (HMAC-SHA256)
+- Cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` in HTTPS/prod
+- Session TTL: 8h
+- OAuth state TTL: 10m
+- Timing-safe signature comparison used
 
 ## CORS
 
-`HIVE_CORS_ORIGIN` restricts which origins can call the API.
-Set to `https://the-hive-omega.vercel.app` in production.
+`HIVE_CORS_ORIGIN` restricts allowed origins. If set to a concrete origin, credentials support is enabled (`Access-Control-Allow-Credentials: true`).
 
-## Rate Limiting
+## Rate limiting
 
 Vercel Edge Middleware (`middleware.js`) applies:
 - 60 requests/minute per IP on all `/api/*` routes
 - In-memory sliding window (per edge instance)
 - Returns 429 with `Retry-After: 60` when exceeded
-
-## Health Endpoint Sanitization
-
-`/api/health` strips all metadata from the gateway response:
-- No bot usernames, IDs, or application details
-- Returns only `{ ok: boolean, channels: { <name>: { ok: boolean } } }`

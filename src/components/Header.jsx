@@ -163,6 +163,11 @@ export default function Header({
               </>
             )}
           </button>
+
+          {/* Sign out */}
+          <a href="/api/auth/logout" className="theme-toggle" aria-label="Sign out of The Hive">
+            Sign out
+          </a>
         </div>
       </div>
     </header>
