@@ -10,6 +10,8 @@ import JobsSummaryCard from './components/JobsSummaryCard'
 import JobsOperationsPanel from './components/JobsOperationsPanel'
 import EscalationsPanel from './components/EscalationsPanel'
 import AlertFeed from './components/AlertFeed'
+import WebSearchQuotaHealthPanel from './components/WebSearchQuotaHealthPanel'
+import SearchIndexEfficiencyPanel from './components/SearchIndexEfficiencyPanel'
 import ClawHubPanel from './components/ClawHubPanel'
 import BacklogPanel from './components/BacklogPanel'
 import ProjectsHub from './components/ProjectsHub'
@@ -203,6 +205,34 @@ function Dashboard() {
       failedOrRecentIssueCount: 0,
       nextUpcomingRun: null,
     },
+    webSearchQuota: {
+      providers: {
+        primary: { name: 'tavily', status: 'unknown', reason: null },
+        secondary: { name: 'serpapi', status: 'unknown', reason: null },
+        emergency: { name: 'duckduckgo', status: 'unknown', reason: null },
+      },
+      currentActiveProvider: null,
+      dualExhaustion: { critical: false, threshold: 1, consecutiveDualOverlimit: 0 },
+      lastAlert: null,
+      noData: true,
+    },
+    searchIndexEfficiency: {
+      summary: {
+        requestCount: 0,
+        p50LatencyMs: null,
+        p95LatencyMs: null,
+        slowQueryCount: 0,
+        status: 'no_data',
+      },
+      operations: {
+        contextSearch: { requestCount: 0, p50LatencyMs: null, p95LatencyMs: null, slowQueryCount: 0, status: 'no_data' },
+        configSearch: { requestCount: 0, p50LatencyMs: null, p95LatencyMs: null, slowQueryCount: 0, status: 'no_data' },
+        indexSearch: { requestCount: 0, p50LatencyMs: null, p95LatencyMs: null, slowQueryCount: 0, status: 'no_data' },
+      },
+      trend: [],
+      thresholds: { warningMs: 400, criticalMs: 1200 },
+      noData: true,
+    },
     alertsMeta: {
       source: 'MOCK',
       isMock: true,
@@ -282,6 +312,11 @@ function Dashboard() {
             />
 
             <AlertFeed alerts={dashboard.alerts} meta={dashboard.alertsMeta} />
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <WebSearchQuotaHealthPanel data={dashboard.webSearchQuota} />
+              <SearchIndexEfficiencyPanel data={dashboard.searchIndexEfficiency} />
+            </div>
 
             <MetricsBar metrics={dashboard.metrics} />
 

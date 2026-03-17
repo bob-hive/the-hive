@@ -88,6 +88,8 @@ export async function fetchDashboardData() {
     apiFetch('/api/stats'),
     apiFetch('/api/health'),
     apiFetch('/api/sessions?scope=jobs&limit=200'),
+    apiFetch('/api/monitoring/web-search-quota'),
+    apiFetch('/api/monitoring/search-index-efficiency'),
   ])
 
   const allRejected = results.every((r) => r.status === 'rejected')
@@ -100,7 +102,18 @@ export async function fetchDashboardData() {
     return { ...generateMockDashboardData(), _offline: true }
   }
 
-  const [alertsRes, escalationsRes, agentsRes, activityRes, sessionsRes, statsRes, healthRes, jobsRes] = results
+  const [
+    alertsRes,
+    escalationsRes,
+    agentsRes,
+    activityRes,
+    sessionsRes,
+    statsRes,
+    healthRes,
+    jobsRes,
+    webSearchQuotaRes,
+    searchIndexEfficiencyRes,
+  ] = results
 
   const alerts = alertsRes.status === 'fulfilled' ? (alertsRes.value.alerts ?? []) : []
   const escalations = escalationsRes.status === 'fulfilled' ? (escalationsRes.value.escalations ?? []) : []
@@ -111,6 +124,8 @@ export async function fetchDashboardData() {
   const health = healthRes.status === 'fulfilled' ? healthRes.value : {}
   const jobs = jobsRes.status === 'fulfilled' ? (jobsRes.value.jobs ?? []) : []
   const jobsSummary = jobsRes.status === 'fulfilled' ? (jobsRes.value.summary ?? null) : null
+  const webSearchQuota = webSearchQuotaRes.status === 'fulfilled' ? webSearchQuotaRes.value : null
+  const searchIndexEfficiency = searchIndexEfficiencyRes.status === 'fulfilled' ? searchIndexEfficiencyRes.value : null
 
   const isMock = Boolean(
     alertsRes.value?.mock ||
@@ -143,6 +158,34 @@ export async function fetchDashboardData() {
       totalActiveJobs: 0,
       failedOrRecentIssueCount: 0,
       nextUpcomingRun: null,
+    },
+    webSearchQuota: webSearchQuota ?? {
+      providers: {
+        primary: { name: 'tavily', status: 'unknown', reason: null },
+        secondary: { name: 'serpapi', status: 'unknown', reason: null },
+        emergency: { name: 'duckduckgo', status: 'unknown', reason: null },
+      },
+      currentActiveProvider: null,
+      dualExhaustion: { critical: false, threshold: 1, consecutiveDualOverlimit: 0 },
+      lastAlert: null,
+      noData: true,
+    },
+    searchIndexEfficiency: searchIndexEfficiency ?? {
+      summary: {
+        requestCount: 0,
+        p50LatencyMs: null,
+        p95LatencyMs: null,
+        slowQueryCount: 0,
+        status: 'no_data',
+      },
+      operations: {
+        contextSearch: { requestCount: 0, p50LatencyMs: null, p95LatencyMs: null, slowQueryCount: 0, status: 'no_data' },
+        configSearch: { requestCount: 0, p50LatencyMs: null, p95LatencyMs: null, slowQueryCount: 0, status: 'no_data' },
+        indexSearch: { requestCount: 0, p50LatencyMs: null, p95LatencyMs: null, slowQueryCount: 0, status: 'no_data' },
+      },
+      trend: [],
+      thresholds: { warningMs: 400, criticalMs: 1200 },
+      noData: true,
     },
     escalations,
     sessions,

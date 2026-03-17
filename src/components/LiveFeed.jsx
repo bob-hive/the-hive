@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Zap, CheckCircle2, XCircle, Activity } from 'lucide-react'
 import { createEventFeed, relativeTime } from '../data/mock'
+import { formatFreshness, isStale, parseTimestamp } from '../utils/freshness'
 
 // Synthetic events injected over time when no real data is flowing
 const SYNTHETIC_EVENTS = [
@@ -26,6 +27,22 @@ const TYPE_LABEL = {
   error:     { label: 'error',     style: { background: 'rgba(239,68,68,0.15)', color: 'var(--color-error)' } },
 }
 
+const VALID_TYPES = new Set(['spawned', 'active', 'completed', 'error'])
+
+function normalizeEvent(event, fallbackId) {
+  const timestamp = parseTimestamp(event?.timestamp) || Date.now()
+  const type = VALID_TYPES.has(event?.type) ? event.type : 'active'
+
+  return {
+    ...event,
+    id: event?.id || fallbackId,
+    type,
+    timestamp,
+    agentName: event?.agentName || 'Agent',
+    message: event?.message || 'Activity recorded',
+  }
+}
+
 let syntheticIdx = 0
 let eventSeq = 100
 
@@ -33,7 +50,7 @@ export default function LiveFeed({ agents = [], events: propEvents = null }) {
   // When propEvents is provided (real API data), seed the feed from it.
   // Otherwise fall back to the mock seed.
   const seedEvents = propEvents && propEvents.length > 0 ? propEvents : createEventFeed(Date.now())
-  const [events, setEvents] = useState(seedEvents)
+  const [events, setEvents] = useState(() => seedEvents.map((ev, i) => normalizeEvent(ev, `seed-${i}`)))
   const [paused, setPaused] = useState(false)
   const listRef = useRef(null)
   const pausedRef = useRef(false)
@@ -43,7 +60,7 @@ export default function LiveFeed({ agents = [], events: propEvents = null }) {
   // Sync when prop events change (real data poll)
   useEffect(() => {
     if (!propEvents || propEvents.length === 0) return
-    setEvents(propEvents)
+    setEvents(propEvents.map((ev, i) => normalizeEvent(ev, `api-${i}`)))
   }, [propEvents])
 
   // Only inject synthetic events when NOT using real API data
@@ -54,25 +71,30 @@ export default function LiveFeed({ agents = [], events: propEvents = null }) {
       if (pausedRef.current) return
       const template = SYNTHETIC_EVENTS[syntheticIdx % SYNTHETIC_EVENTS.length]
       syntheticIdx++
-      const newEvent = {
+      const newEvent = normalizeEvent({
         ...template,
         id: `e-live-${++eventSeq}`,
         timestamp: Date.now(),
-      }
+      }, `live-${eventSeq}`)
       setEvents((prev) => [newEvent, ...prev].slice(0, 50))
     }, 6000)
     return () => clearInterval(timer)
   }, [propEvents])
 
   const agentsById = new Map((agents).map((a) => [a.id, a]))
+  const latestEventTs = events.reduce((max, ev) => Math.max(max, parseTimestamp(ev?.timestamp) || 0), 0)
+  const freshnessLabel = formatFreshness(latestEventTs || null)
+  const stale = isStale(latestEventTs || null, 10 * 60 * 1000)
+  const sourceLabel = propEvents && propEvents.length > 0 ? 'API FEED' : 'SIMULATED FEED'
 
   return (
     <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
           <h2 className="section-title">
             Live Feed
           </h2>
+          <span className="section-chip">{sourceLabel}</span>
           {/* Live indicator */}
           <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
             style={{ background: paused ? 'var(--color-surface-2)' : 'rgba(34,197,94,0.12)', color: paused ? 'var(--color-text-muted)' : 'var(--color-success)', border: `1px solid ${paused ? 'var(--color-border)' : 'rgba(34,197,94,0.3)'}` }}>
@@ -83,6 +105,9 @@ export default function LiveFeed({ agents = [], events: propEvents = null }) {
               display: 'inline-block', flexShrink: 0,
             }} />
             {paused ? 'paused' : 'live'}
+          </span>
+          <span className="text-xs" style={{ color: stale ? 'var(--color-warning)' : 'var(--color-text-muted)' }}>
+            {freshnessLabel}
           </span>
         </div>
         <button
@@ -149,7 +174,7 @@ export default function LiveFeed({ agents = [], events: propEvents = null }) {
                     className="flex-shrink-0 text-xs tabular-nums"
                     style={{ color: 'var(--color-text-muted)' }}
                   >
-                    {relativeTime(ev.timestamp)}
+                    {relativeTime(parseTimestamp(ev.timestamp) || Date.now())}
                   </span>
                 </li>
               )

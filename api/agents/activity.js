@@ -9,25 +9,61 @@ import { tryGatewayRpc, getGatewayConfig } from '../_lib/gateway.js'
 import { getMockActivity } from '../_lib/mock.js'
 import { checkHiveApiKey, jsonResponse, unauthorizedResponse, corsHeaders, requireUserSession } from '../_lib/auth.js'
 
-/** Parse agentId from a session. Prefer explicit field, then parse from key. */
-function agentIdFromSession(session) {
-  if (session?.agentId) return String(session.agentId)
+const KNOWN_AGENT_IDS = ['bob', 'scout', 'forge', 'ledger', 'sentinel']
 
-  const key = session?.key || ''
-  if (!key) return 'unknown'
+function normalizeToken(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
+}
 
-  const parts = key.split(':')
-  if (parts[0] === 'agent' && parts[1]) return parts[1]
-  return parts[0] || 'unknown'
+/** Parse agentId from structured fields, session key, and labels. */
+function agentIdFromSession(session = {}) {
+  const directFields = [session.agentId, session.agent, session.owner, session.worker]
+  for (const value of directFields) {
+    const normalized = normalizeToken(value)
+    if (!normalized) continue
+    if (normalized === 'main') return 'bob'
+    return normalized
+  }
+
+  const key = String(session.key || '')
+  const parts = key.split(':').map((part) => normalizeToken(part)).filter(Boolean)
+  if (parts[0] === 'agent' && parts[1]) {
+    if (parts[1] === 'main') return 'bob'
+    return parts[1]
+  }
+
+  const labelBlob = [session.label, session.name, session.title, session.summary]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  const matchedKnown = KNOWN_AGENT_IDS.find((id) => labelBlob.includes(id))
+  if (matchedKnown) return matchedKnown
+
+  return 'unknown'
 }
 
 /** Best-effort timestamp extraction from known session fields. */
-function sessionTimestamp(session) {
-  const candidates = [session?.lastActiveMs, session?.updatedAt, session?.createdAt]
+function sessionTimestamp(session = {}) {
+  const candidates = [
+    session.lastActiveMs,
+    session.lastEventTs,
+    session.updatedAt,
+    session.lastSeenAt,
+    session.createdAt,
+    session.ts,
+  ]
 
   for (const value of candidates) {
-    if (!value) continue
-    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (value === null || value === undefined || value === '') continue
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value > 1_000_000_000_000 ? value : value * 1000
+    }
+
+    const numeric = Number(value)
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return numeric > 1_000_000_000_000 ? numeric : numeric * 1000
+    }
 
     const parsed = Date.parse(String(value))
     if (!Number.isNaN(parsed)) return parsed
@@ -36,36 +72,66 @@ function sessionTimestamp(session) {
   return null
 }
 
-/** Derive event type from session status/key/channel */
-function eventTypeFromSession(session) {
-  const key = session.key || ''
-  const channel = session.channel || ''
-  const status = String(session.status || '').toLowerCase()
+/** Derive event type from session fields and status hints. */
+function eventTypeFromSession(session = {}) {
+  const key = String(session.key || '').toLowerCase()
+  const channel = String(session.channel || '').toLowerCase()
+  const statusBlob = [session.status, session.state, session.outcome, session.result]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
 
-  if (status.includes('error') || status.includes('fail')) return 'error'
-  if (status.includes('complete') || status.includes('success') || status.includes('done')) return 'completed'
-  if (key.includes(':subagent:')) return 'spawned'
-  if (key.includes(':cron:')) return 'completed'
-  if (channel === 'telegram' || channel === 'discord') return 'active'
+  if (statusBlob.includes('error') || statusBlob.includes('fail')) return 'error'
+  if (statusBlob.includes('complete') || statusBlob.includes('success') || statusBlob.includes('done')) return 'completed'
+
+  if (key.includes(':subagent:')) {
+    if (statusBlob.includes('running') || statusBlob.includes('active')) return 'spawned'
+    return 'active'
+  }
+
+  if (channel === 'cron' && (statusBlob.includes('idle') || statusBlob.includes('sleep'))) return 'completed'
+  if (statusBlob.includes('idle')) return 'completed'
+
   return 'active'
 }
 
+function trimMessage(value, max = 120) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (text.length <= max) return text
+  return `${text.slice(0, max - 1)}…`
+}
+
 /** Build a human-readable message for a session */
-function messageFromSession(session) {
-  const key = session.key || ''
-  const channel = session.channel || ''
-  const label = session.label || ''
+function messageFromSession(session = {}, eventType = 'active') {
+  const key = String(session.key || '')
+  const channel = String(session.channel || '')
+  const label = String(session.label || session.name || '').trim()
+
+  const explicit =
+    trimMessage(session.summary) ||
+    trimMessage(session.message) ||
+    trimMessage(session.currentTask)
+  if (explicit) return explicit
 
   if (key.includes(':subagent:')) {
-    return `Subagent spawned${label ? `: ${label}` : ''}`
+    if (eventType === 'error') return `Subagent encountered an error${label ? `: ${label}` : ''}`
+    if (eventType === 'completed') return `Subagent completed${label ? `: ${label}` : ''}`
+    return `Subagent running${label ? `: ${label}` : ''}`
   }
+
   if (key.includes(':cron:')) {
-    return `Cron task${label ? `: ${label}` : ' completed'}`
+    if (eventType === 'error') return `Cron task failed${label ? `: ${label}` : ''}`
+    if (eventType === 'completed') return `Cron task completed${label ? `: ${label}` : ''}`
+    return `Cron task active${label ? `: ${label}` : ''}`
   }
+
   if (channel === 'telegram') return `Active on Telegram${label ? ` — ${label}` : ''}`
   if (channel === 'discord') return `Active on Discord${label ? ` — ${label}` : ''}`
-  if (label) return label
-  return `Session active: ${key.split(':').slice(-2).join(':')}`
+  if (channel === 'cron') return `Cron activity${label ? ` — ${label}` : ''}`
+  if (label) return trimMessage(label)
+
+  return `Session activity: ${key.split(':').slice(-2).join(':') || 'unknown'}`
 }
 
 /** Name from agent ID (title-case) */
@@ -96,21 +162,21 @@ export default async function handler(req, res) {
 
     // Convert sessions to activity events
     const events = sessions
-      .map((session) => ({ ...session, __ts: sessionTimestamp(session) }))
-      .filter((session) => Boolean(session.__ts))
+      .map((session, idx) => ({ ...session, __ts: sessionTimestamp(session) || (Date.now() - idx * 1000) }))
       .sort((a, b) => (b.__ts || 0) - (a.__ts || 0))
       .slice(0, 30)
       .map((session, i) => {
         const agentId = agentIdFromSession(session)
+        const eventType = eventTypeFromSession(session)
         const baseId = session.id || session.sessionId || session.key || `session-${i}`
 
         return {
           id: `ev-${String(baseId).replace(/[^a-z0-9]/gi, '-')}-${i}`,
-          type: eventTypeFromSession(session),
+          type: eventType,
           agentId,
           agentName: nameFromId(agentId),
           timestamp: session.__ts || Date.now(),
-          message: messageFromSession(session),
+          message: messageFromSession(session, eventType),
         }
       })
 
