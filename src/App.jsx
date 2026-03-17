@@ -17,11 +17,15 @@ import ClawHubPanel from './components/ClawHubPanel'
 import BacklogPanel from './components/BacklogPanel'
 import ProjectsHub from './components/ProjectsHub'
 import Footer from './components/Footer'
+import ActivityFeed from './components/ActivityFeed'
+import UsageTracker from './components/UsageTracker'
 import { ApiError, fetchAuthState, fetchDashboardData } from './data/api'
 import { usePolling } from './hooks/usePolling'
 
 const POLL_INTERVAL_MS = parseInt(import.meta.env.VITE_POLL_INTERVAL_MS || '10000', 10)
 const ENABLE_REALTIME_STATUS_PANEL = import.meta.env.VITE_ENABLE_REALTIME_STATUS_PANEL === 'true'
+const ENABLE_ACTIVITY_FEED = import.meta.env.VITE_ENABLE_ACTIVITY_FEED === 'true'
+const ENABLE_USAGE_TRACKER = import.meta.env.VITE_ENABLE_USAGE_TRACKER === 'true'
 
 function AuthScreen({
   title,
@@ -365,6 +369,13 @@ function Dashboard() {
             <ProjectsHub />
 
             <BacklogPanel />
+
+            {ENABLE_ACTIVITY_FEED || ENABLE_USAGE_TRACKER ? (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                {ENABLE_ACTIVITY_FEED && <ActivityFeed />}
+                {ENABLE_USAGE_TRACKER && <UsageTracker />}
+              </div>
+            ) : null}
 
             <ClawHubPanel />
           </>
