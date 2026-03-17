@@ -4,6 +4,7 @@ import Header from './components/Header'
 import MetricsBar from './components/MetricsBar'
 import Trends from './components/Trends'
 import AgentGrid from './components/AgentGrid'
+import RealTimeStatusPanel from './components/RealTimeStatusPanel'
 import LiveFeed from './components/LiveFeed'
 import Timeline from './components/Timeline'
 import JobsSummaryCard from './components/JobsSummaryCard'
@@ -20,6 +21,7 @@ import { ApiError, fetchAuthState, fetchDashboardData } from './data/api'
 import { usePolling } from './hooks/usePolling'
 
 const POLL_INTERVAL_MS = parseInt(import.meta.env.VITE_POLL_INTERVAL_MS || '10000', 10)
+const ENABLE_REALTIME_STATUS_PANEL = import.meta.env.VITE_ENABLE_REALTIME_STATUS_PANEL === 'true'
 
 function AuthScreen({
   title,
@@ -233,6 +235,29 @@ function Dashboard() {
       thresholds: { warningMs: 400, criticalMs: 1200 },
       noData: true,
     },
+    realtimeStatusPanel: {
+      source: 'MOCK',
+      mode: 'MOCK',
+      mock: true,
+      freshness: {
+        source: 'MOCK',
+        mode: 'MOCK',
+        observedAtMs: 0,
+        generatedAtMs: 0,
+        ageMs: 0,
+        staleAfterMs: 90_000,
+        stale: false,
+      },
+      counts: {
+        total: 0,
+        busy: 0,
+        online: 0,
+        idle: 0,
+        error: 0,
+      },
+      agents: [],
+      ts: 0,
+    },
     alertsMeta: {
       source: 'MOCK',
       isMock: true,
@@ -322,7 +347,11 @@ function Dashboard() {
 
             <JobsSummaryCard summary={dashboard.jobsSummary} />
 
-            <AgentGrid agents={dashboard.agents} />
+            {ENABLE_REALTIME_STATUS_PANEL ? (
+              <RealTimeStatusPanel panel={dashboard.realtimeStatusPanel} />
+            ) : (
+              <AgentGrid agents={dashboard.agents} />
+            )}
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <LiveFeed agents={dashboard.agents} events={dashboard.events} />

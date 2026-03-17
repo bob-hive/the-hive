@@ -33,6 +33,8 @@ Open `http://localhost:5173` and sign in with an allowed Google account.
 - `OPENCLAW_GATEWAY_URL`
 - `OPENCLAW_API_TOKEN`
 - `MOCK_MODE`
+- `VITE_ENABLE_REALTIME_STATUS_PANEL` (feature flag for new status panel)
+- `HIVE_LIVE_STATUS_STALE_MS` (freshness threshold for live status metadata)
 - `HIVE_ALERTS_DIR` (optional alert store path override)
 - `HIVE_ALERT_DEDUPE_WINDOW_MS` (optional dedupe window override)
 - `HIVE_ALERT_SUPPRESS_WINDOW_MS` (optional suppression window override; default 15 min)
@@ -67,3 +69,5 @@ vercel --prod
 - Security model: `docs/security.md`
 - Product/UI references: `docs/ui-direction-agentclaw.md`
 - Alerts control plane: `docs/alerts-control-plane.md`
+- Live backend env contract: `docs/live-backend-env-contract.md`
+- Next slice implementation plan: `docs/next-slice-live-backend-status-panel.md`

@@ -8,6 +8,7 @@
 import { generateMockDashboardData } from './mock.js'
 
 const MOCK_MODE = import.meta.env.VITE_MOCK_MODE === 'true'
+const ENABLE_REALTIME_STATUS_PANEL = import.meta.env.VITE_ENABLE_REALTIME_STATUS_PANEL === 'true'
 const API_KEY = import.meta.env.VITE_HIVE_API_KEY || ''
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 
@@ -90,6 +91,7 @@ export async function fetchDashboardData() {
     apiFetch('/api/sessions?scope=jobs&limit=200'),
     apiFetch('/api/monitoring/web-search-quota'),
     apiFetch('/api/monitoring/search-index-efficiency'),
+    ENABLE_REALTIME_STATUS_PANEL ? apiFetch('/api/live/status-panel') : Promise.resolve(null),
   ])
 
   const allRejected = results.every((r) => r.status === 'rejected')
@@ -113,6 +115,7 @@ export async function fetchDashboardData() {
     jobsRes,
     webSearchQuotaRes,
     searchIndexEfficiencyRes,
+    realtimeStatusPanelRes,
   ] = results
 
   const alerts = alertsRes.status === 'fulfilled' ? (alertsRes.value.alerts ?? []) : []
@@ -126,13 +129,15 @@ export async function fetchDashboardData() {
   const jobsSummary = jobsRes.status === 'fulfilled' ? (jobsRes.value.summary ?? null) : null
   const webSearchQuota = webSearchQuotaRes.status === 'fulfilled' ? webSearchQuotaRes.value : null
   const searchIndexEfficiency = searchIndexEfficiencyRes.status === 'fulfilled' ? searchIndexEfficiencyRes.value : null
+  const realtimeStatusPanel = realtimeStatusPanelRes?.status === 'fulfilled' ? realtimeStatusPanelRes.value : null
 
   const isMock = Boolean(
     alertsRes.value?.mock ||
     escalationsRes.value?.mock ||
     agentsRes.value?.mock ||
     statsRes.value?.mock ||
-    jobsRes.value?.mock
+    jobsRes.value?.mock ||
+    realtimeStatusPanelRes?.value?.mock
   )
   const metrics = {
     tasksCompletedToday: stats.tasksCompletedToday ?? 0,
@@ -186,6 +191,38 @@ export async function fetchDashboardData() {
       trend: [],
       thresholds: { warningMs: 400, criticalMs: 1200 },
       noData: true,
+    },
+    realtimeStatusPanel: realtimeStatusPanel ?? {
+      source: 'MOCK',
+      mode: 'MOCK',
+      mock: true,
+      freshness: {
+        source: 'MOCK',
+        mode: 'MOCK',
+        observedAtMs: Date.now(),
+        generatedAtMs: Date.now(),
+        ageMs: 0,
+        staleAfterMs: 90_000,
+        stale: false,
+      },
+      counts: {
+        total: agents.length,
+        busy: agents.filter((agent) => agent.status === 'busy').length,
+        online: agents.filter((agent) => agent.status === 'online').length,
+        idle: agents.filter((agent) => agent.status === 'idle').length,
+        error: agents.filter((agent) => agent.status === 'error').length,
+      },
+      agents: agents.map((agent) => ({
+        id: agent.id,
+        name: agent.name,
+        role: agent.role,
+        avatar: agent.avatar,
+        status: agent.status,
+        pulse: 'cool',
+        lastSeenMs: agent.lastActiveMs || null,
+        currentTask: agent.currentTask || '',
+      })),
+      ts: Date.now(),
     },
     escalations,
     sessions,
