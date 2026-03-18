@@ -72,7 +72,7 @@
     {
       "id": "the-hive-dashboard",
       "roadmapRef": "Project 3",
-      "name": "The Hive — Agent Activity Dashboard",
+      "name": "The Hive \u2014 Agent Activity Dashboard",
       "ragStatus": "amber",
       "progressSummary": "v1 shipped and deployed; live feeds, richer history, and planning/ops surfaces are actively being built.",
       "owner": "Bob",
@@ -254,33 +254,76 @@
       "id": "turnkeylistingmedia-website-remake",
       "roadmapRef": "Project 9",
       "name": "TurnkeyListingMedia Website Remake",
-      "ragStatus": "red",
-      "progressSummary": "New high-priority initiative with requirements captured; execution has not started yet.",
+      "ragStatus": "green",
+      "progressSummary": "Phase 1 complete: 5 pages built, logos approved, tech stack confirmed (Next.js 15). Interactive pricing calculator, Before/After slider, mobile responsive. Ready for Ani review.",
       "owner": "Bob + Ani + Forge/Scout",
       "nextSprintFocus": "Audit current site and lock stack, IA, and migration plan before implementation.",
-      "detailedStatus": "Requirements are clearly defined, including integrations and migration safety constraints. Build phase is pending kickoff.",
+      "detailedStatus": "Phase 1 shipped. Phase 2 (booking, payments, Google integrations) pending Ani UAT. CRM toolchain depends on Project 11.",
       "notes": [
-        "Preserve key page content while modernizing architecture and workflows.",
-        "No DNS/cutover action without Ani approval."
+        "Phase 1 pages: Home, Services, Portfolio, About, Contact \u2014 all live on localhost:3001",
+        "Tech stack: Next.js 15 + Tailwind + Framer Motion + Vercel",
+        "Logos: Dark, Light, Favicon SVGs approved.",
+        "Design: Obsidian #0D1117 / Gold #C9A84C / Inter font",
+        "No DNS/cutover without Ani approval."
       ],
       "nextSprint": [
-        "Run full current-site audit and asset inventory.",
-        "Define target stack and hosting plan.",
-        "Create sitemap and conversion-focused page structure."
+        "Ani UAT review at localhost:3001",
+        "Content migration from Base44",
+        "SEO baseline (metadata, sitemap.xml, OG tags)",
+        "Google integrations (Calendar booking, Gmail contact)"
       ],
       "blockers": [
-        "No implementation sprint opened yet.",
-        "Stack and integration decisions pending."
+        "Ani UAT review pending",
+        "CRM toolchain blocked on Project 11 (TK Phone/CRM)"
       ],
       "recommendations": [
-        "Start with staging + migration checklist to de-risk launch.",
-        "Treat pricing + CRM integrations as first-class data models."
+        "Run Ani UAT this week \u2014 Phase 1 is shippable.",
+        "Start CRM toolchain after Project 11 Phase A is stable."
       ],
       "backlog": [
         "Owner-editable CMS workflow for pricing and bundles.",
         "Post-launch analytics + SEO monitoring dashboard."
       ],
-      "lastUpdated": "2026-03-16T14:55:00-05:00"
+      "lastUpdated": "2026-03-18T18:00:00-05:00"
+    },
+    {
+      "id": "tk-phone-crm",
+      "roadmapRef": "Project 11",
+      "name": "TK Phone, SMS & CRM System",
+      "ragStatus": "amber",
+      "progressSummary": "Phase A active: Twilio number live (469-402-4282), voice-call plugin configured, Tailscale Funnel webhook running. AI receptionist tested. Port conflict (3334) and SMS templates remain.",
+      "owner": "Bob + Ani",
+      "nextSprintFocus": "Fix EADDRINUSE on port 3334, add OpenAI TTS key, create SMS booking templates.",
+      "detailedStatus": "Core telephony infrastructure is in place. Twilio DFW number purchased, AI receptionist system prompt created, inbound call test passed (voice quality needs TTS improvement). Blocking issue: port 3334 conflict prevents reliable inbound calls.",
+      "notes": [
+        "Phone: (469) 402-4282 \u2014 DFW, Rockwall rate center",
+        "Twilio credentials stored in keychain (tk_twilio_account_sid)",
+        "Webhook: https://mac-1.tail24e41a.ts.net/voice/webhook",
+        "Forwarding number: 945-394-1954 (Ani's cell)",
+        "CRM templates: Google Drive folder shared"
+      ],
+      "nextSprint": [
+        "Fix voice_call tool EADDRINUSE (port 3334 conflict)",
+        "Add OpenAI API key for streaming TTS (better voice quality)",
+        "Create SMS templates: booking confirm, reminder, delivery, feedback",
+        "Audit CRM templates from Google Drive"
+      ],
+      "blockers": [
+        "Port 3334 conflict (EADDRINUSE) \u2014 inbound calls may fail",
+        "No OpenAI TTS key configured \u2014 voice quality suboptimal"
+      ],
+      "recommendations": [
+        "Fix port conflict before any customer-facing call testing.",
+        "Use OpenAI TTS (alloy or nova voice) for best receptionist experience.",
+        "Consider cloud relay migration after 50+ calls/day or Mac downtime issues."
+      ],
+      "backlog": [
+        "AI receptionist knowledge base tuning",
+        "Cloud relay migration (Cloudflare Worker / small VPS) for 24/7 uptime",
+        "CRM integration with Google Sheets + Drive templates",
+        "End-to-end test: call \u2192 AI answers \u2192 SMS confirm"
+      ],
+      "lastUpdated": "2026-03-18T18:00:00-05:00"
     }
   ]
 }
