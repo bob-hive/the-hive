@@ -162,6 +162,7 @@ export default function ProjectsHub() {
   const projectsData = useMemo(() => getProjectsData(), [])
   const projects = useMemo(() => listProjects(), [])
   const [selectedProjectId, setSelectedProjectId] = useState(getSelectedProjectIdFromUrl)
+  const [showClosed, setShowClosed] = useState(false)
 
   useEffect(() => {
     const onPopState = () => setSelectedProjectId(getSelectedProjectIdFromUrl())
@@ -173,6 +174,13 @@ export default function ProjectsHub() {
     () => getProjectById(selectedProjectId),
     [selectedProjectId],
   )
+
+  const filteredProjects = useMemo(() => {
+    return projects.filter(p => {
+      const isClosed = p.ragStatus === 'green' || p.status === 'closed' || p.status === 'completed';
+      return showClosed ? isClosed : !isClosed;
+    })
+  }, [projects, showClosed])
 
   const updateUrlProject = (value) => {
     const url = new URL(window.location.href)
@@ -199,11 +207,22 @@ export default function ProjectsHub() {
       <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
         <h2 className="section-title">Projects Hub · Planning</h2>
         <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex bg-[var(--color-surface-2)] rounded-lg p-1 border border-[var(--color-border)]">
+            <button
+              onClick={() => setShowClosed(false)}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${!showClosed ? 'bg-[var(--color-accent)] text-white shadow-lg' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`}
+            >
+              Active
+            </button>
+            <button
+              onClick={() => setShowClosed(true)}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${showClosed ? 'bg-[var(--color-accent)] text-white shadow-lg' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`}
+            >
+              Closed
+            </button>
+          </div>
           <span className="section-chip" style={{ color: 'var(--color-accent)', background: 'var(--color-accent-soft)' }}>
             {projectsData.planning.label}
-          </span>
-          <span className="section-chip">
-            Update cadence: weekly + milestone changes
           </span>
         </div>
       </div>
@@ -229,7 +248,7 @@ export default function ProjectsHub() {
       ) : null}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {projects.map((project) => (
+        {filteredProjects.map((project) => (
           <ProjectCard key={project.id} project={project} onOpen={openProject} />
         ))}
       </div>

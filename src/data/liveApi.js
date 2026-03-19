@@ -141,6 +141,32 @@ export async function fetchDashboardData() {
 
     if (tasks.length === 0) tasks.push(...mock.tasks)
 
+    // 2.5 Generate live-ish alerts from failed jobs/sessions
+    const liveAlerts = (cronData.jobs ?? [])
+      .filter(j => j.state?.lastRunStatus === 'failed')
+      .map(j => ({
+        id: `alert-${j.id}`,
+        severity: 'warning',
+        title: `Cron job failed: ${j.name}`,
+        message: `The scheduled run for ${j.name} encountered an error.`,
+        ts: j.state.lastRunAtMs,
+        source: j.agentId ?? 'bob',
+        status: 'open'
+      }))
+
+    // 2.6 Generate live-ish trends
+    const liveTrends = mock.trends.map((t, i) => {
+      // Add some variance based on today's actual numbers
+      if (i === mock.trends.length - 1) {
+        return {
+          ...t,
+          tasksCompleted: tasks.filter(tk => tk.status === 'success').length,
+          successRate: Math.round((tasks.filter(tk => tk.status === 'success').length / (tasks.length || 1)) * 100)
+        }
+      }
+      return t
+    })
+
     // 3. Build Metrics
     const liveMetrics = {
       tasksCompletedToday: tasks.filter(t => t.status === 'success').length,
@@ -156,8 +182,8 @@ export async function fetchDashboardData() {
     return {
       agents,
       tasks,
-      trends: mock.trends,
-      alerts: mock.alerts,
+      trends: liveTrends,
+      alerts: liveAlerts.length > 0 ? liveAlerts : mock.alerts,
       metrics: liveMetrics,
       jobs: cronData.jobs ?? [],
       _isLive: true,

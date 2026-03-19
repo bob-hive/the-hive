@@ -114,7 +114,7 @@ export default function Timeline({ tasks = [], agents = [] }) {
       </div>
 
       {/* Timeline */}
-      <div className="card p-5">
+      <div className="card p-5" style={{ maxHeight: '600px', overflowY: 'auto' }}>
         {filtered.length === 0 ? (
           <div className="py-12 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
             No tasks match your filters.

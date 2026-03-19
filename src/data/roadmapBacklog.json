@@ -1,31 +1,31 @@
 {
-  "project": "Project 3 · The Hive",
+  "project": "Master Roadmap",
   "title": "Backlog / Discuss with Ani",
-  "description": "Roadmap candidates queued for planning and prioritization.",
+  "description": "Active and queued projects synced from PROJECTS.md.",
   "items": [
     {
-      "id": "ui-inspiration-pass",
-      "title": "agentclaw.space UI inspiration pass",
-      "detail": "Capture reusable layout + interaction ideas for The Hive dashboard evolution.",
-      "tag": "Design"
+      "id": "p10-roleranger",
+      "title": "Project 10: RoleRanger 🎯",
+      "detail": "AI-powered job hunt and application monitoring for Product Manager lane.",
+      "tag": "Active"
     },
     {
-      "id": "project-status-board",
-      "title": "Project status visual board",
-      "detail": "Add a lightweight visual board for in-flight, blocked, and completed project tracks.",
-      "tag": "Product"
+      "id": "p4-skills",
+      "title": "Project 4: Additional Skills",
+      "detail": "Capability gap audit and high-value skill installation from ClawHub.",
+      "tag": "Backlog"
     },
     {
-      "id": "agent-profiles-integrations",
-      "title": "Agent profiles + integration capabilities",
-      "detail": "Expose each agent's role, tools, and connected integrations in one view.",
-      "tag": "Platform"
+      "id": "p6-notion",
+      "title": "Project 6: Notion Integration",
+      "detail": "Discovery and auth groundwork for Notion-backed planning docs.",
+      "tag": "Queued"
     },
     {
-      "id": "specialized-agent-designer",
-      "title": "Specialized agent/task designer (cruise deal hunter workflow)",
-      "detail": "Prototype a guided workflow builder for narrowly scoped, high-ROI automation tasks.",
-      "tag": "Workflow"
+      "id": "p8-whatsapp",
+      "title": "Project 8: WhatsApp Social",
+      "detail": "Validate wacli setup and align on tone, recipients, and boundaries.",
+      "tag": "Discovery"
     }
   ]
 }
