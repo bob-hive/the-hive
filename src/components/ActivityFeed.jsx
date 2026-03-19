@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, memo } from 'react'
 import {
   Activity,
   AlertTriangle,
@@ -86,11 +86,20 @@ function isDark() {
 
 // ── EventCard ─────────────────────────────────────────────────────────────────
 
-function EventCard({ event }) {
+const SUMMARY_CLAMP = 120 // chars before showing "expand"
+
+const EventCard = memo(function EventCard({ event }) {
+  const [expanded, setExpanded] = useState(false)
   const typeCfg = EVENT_TYPE_CONFIG[event.eventType] || EVENT_TYPE_CONFIG.task
   const statusCfg = STATUS_CONFIG[event.status] || STATUS_CONFIG.unknown
   const colors = isDark() ? typeCfg.dark : typeCfg.light
   const TypeIcon = typeCfg.icon
+
+  const summary = event.summary || ''
+  const isTruncatable = summary.length > SUMMARY_CLAMP
+  const displaySummary = isTruncatable && !expanded
+    ? summary.slice(0, SUMMARY_CLAMP).trimEnd() + '…'
+    : summary
 
   return (
     <div
@@ -119,15 +128,32 @@ function EventCard({ event }) {
       </div>
 
       <p className="text-sm mt-1.5 font-medium leading-snug" style={{ color: 'var(--color-text-primary)' }}>
-        {event.summary}
+        {displaySummary}
       </p>
+
+      {isTruncatable && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-[11px] font-semibold mt-0.5"
+          style={{
+            color: colors.color,
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+          }}
+        >
+          {expanded ? 'Show less ↑' : 'Show more ↓'}
+        </button>
+      )}
 
       <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-muted)' }}>
         {event.agentName || event.agent}
       </p>
     </div>
   )
-}
+})
 
 // ── FilterPill ────────────────────────────────────────────────────────────────
 
@@ -198,9 +224,12 @@ export default function ActivityFeed() {
   const stale = freshness ? freshness.stale : false
   const freshnessLabel = freshness ? formatFreshness(freshness.generatedAtMs) : '—'
 
+  // Always sort newest-first
+  const sortedEvents = [...events].sort((a, b) => b.timestamp - a.timestamp)
+
   const filtered = activeFilter === 'all'
-    ? events
-    : events.filter((e) => e.eventType === activeFilter)
+    ? sortedEvents
+    : sortedEvents.filter((e) => e.eventType === activeFilter)
 
   const typeCounts = {}
   for (const e of events) {

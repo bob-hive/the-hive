@@ -7,6 +7,24 @@ const STATUS_LABEL = {
   error: 'Error',
 }
 
+// Stale detection thresholds
+const STALE_AMBER_MS = 30 * 60_000   // 30 min
+const STALE_RED_MS   = 2 * 3_600_000 // 2 h
+
+function getStaleness(lastActiveMs) {
+  if (!lastActiveMs) return null
+  const age = Date.now() - lastActiveMs
+  if (age >= STALE_RED_MS)   return 'red'
+  if (age >= STALE_AMBER_MS) return 'amber'
+  return null
+}
+
+function stalenessStyle(level) {
+  if (level === 'red')   return { color: '#ef4444' }
+  if (level === 'amber') return { color: '#f59e0b' }
+  return { color: 'var(--color-text-muted)' }
+}
+
 // Mini sparkline SVG — accepts an array of 0-100 values
 function Sparkline({ data = [], color = 'var(--color-accent)' }) {
   if (!data.length) return null
@@ -58,17 +76,25 @@ const SPARKLINE_COLOR = {
 export default function AgentCard({ agent, index }) {
   const delay = ['delay-100', 'delay-200', 'delay-300', 'delay-400', 'delay-500'][index % 5]
   const sparkColor = SPARKLINE_COLOR[agent.status] ?? 'var(--color-accent)'
+  const staleLevel = agent.status === 'online' ? getStaleness(agent.lastActiveMs) : null
+  const lastSeenLabel = agent.lastActiveMs ? relativeTime(agent.lastActiveMs) : null
 
   return (
     <div className={`card p-5 flex flex-col gap-4 animate-slide-up ${delay}`}>
       {/* Top row — avatar + name + status */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <div
-            className="text-2xl w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'var(--color-surface-2)' }}
-          >
-            {agent.avatar}
+          {/* Avatar with optional heartbeat ring for online agents */}
+          <div className="relative flex-shrink-0">
+            <div
+              className="text-2xl w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: 'var(--color-surface-2)' }}
+            >
+              {agent.avatar}
+            </div>
+            {agent.status === 'online' && (
+              <span className="agent-heartbeat-ring" />
+            )}
           </div>
           <div>
             <h3 className="font-semibold text-sm leading-tight" style={{ color: 'var(--color-text-primary)' }}>
@@ -124,12 +150,22 @@ export default function AgentCard({ agent, index }) {
           </span>{' '}
           tasks
         </span>
-        <span>
-          Active{' '}
-          <span className="font-semibold tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
-            {agent.lastActiveMs ? relativeTime(agent.lastActiveMs) : formatUptime(agent.uptime) + ' up'}
+
+        {/* Last seen with stale detection */}
+        {lastSeenLabel ? (
+          <span style={stalenessStyle(staleLevel)}>
+            {staleLevel === 'red'   && '🔴 '}
+            {staleLevel === 'amber' && '🟡 '}
+            last seen {lastSeenLabel}
           </span>
-        </span>
+        ) : (
+          <span>
+            Active{' '}
+            <span className="font-semibold tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
+              {formatUptime(agent.uptime)} up
+            </span>
+          </span>
+        )}
       </div>
     </div>
   )

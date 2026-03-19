@@ -43,7 +43,7 @@ export default function Header({
     >
       <div
         style={{ maxWidth: 1280 }}
-        className="mx-auto px-6 py-4 flex items-center justify-between gap-3"
+        className="mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 sm:gap-3"
       >
         {/* Logo + title */}
         <div className="flex items-center gap-3">
@@ -62,7 +62,7 @@ export default function Header({
         </div>
 
         {/* Right controls */}
-        <div className="flex items-center gap-4 flex-wrap justify-end">
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end">
           {/* Last updated */}
           <div className="hidden lg:flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
             <span>Updated:</span>
@@ -124,7 +124,7 @@ export default function Header({
             disabled={isRefreshing}
           >
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-            <span>{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
+            <span className="hidden sm:inline">{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
           </button>
 
           {/* Live indicator */}

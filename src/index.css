@@ -67,6 +67,11 @@ body {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.4); opacity: 0.7; }
 }
+@keyframes heartbeat-ring {
+  0%   { transform: scale(1);    opacity: 0.7; }
+  70%  { transform: scale(1.55); opacity: 0; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
 @keyframes slide-in-up {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -144,6 +149,19 @@ body {
 .status-dot.busy    { background: var(--color-busy); }
 .status-dot.idle    { background: var(--color-idle); }
 .status-dot.online.pulse { animation: pulse-dot 1.8s ease-in-out infinite; }
+
+/* ── Agent heartbeat ring (outer pulse on avatar) ── */
+.agent-heartbeat-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 14px;
+  border: 2px solid var(--color-online);
+  animation: heartbeat-ring 2s ease-out infinite;
+  pointer-events: none;
+}
+[data-theme="neon"] .agent-heartbeat-ring {
+  box-shadow: 0 0 8px rgba(57, 255, 133, 0.5);
+}
 
 [data-theme="neon"] .status-dot.online {
   box-shadow: 0 0 6px var(--color-online), 0 0 12px rgba(57,255,133,0.4);
@@ -263,6 +281,15 @@ body {
 .dashboard-main {
   padding-top: 2.25rem;
   padding-bottom: 2.75rem;
+}
+
+/* Tighter horizontal padding on small screens */
+@media (max-width: 640px) {
+  .dashboard-main {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  /* Stack xl:grid-cols-2 grids nicely on narrow screens — already done by Tailwind grid-cols-1 default */
 }
 
 .section-title {
