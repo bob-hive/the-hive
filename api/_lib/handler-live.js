@@ -5,11 +5,13 @@
 
 import process from 'node:process'
 import { readFile } from 'node:fs/promises'
+import fs from 'node:fs/promises'
 import path from 'node:path'
-import { checkHiveApiKey, jsonResponse, requireUserSession, unauthorizedResponse } from './auth.js'
+import { checkHiveApiKey, hasStrictHiveApiKey, jsonResponse, requireUserSession, unauthorizedResponse } from './auth.js'
 import { getGatewayConfig, tryGatewayRpc } from './gateway.js'
 import { getMockActivity } from './mock.js'
 import { getAgentStatusPanelData } from './openclaw-service-client.js'
+import { readPushStore } from './push-store.js'
 
 // ─── /api/live/status-panel + /api/live/pulse ───────────────────────────────
 
@@ -381,7 +383,36 @@ async function getLiveUsageData() {
   }
 }
 
+// ─── /api/live/usage-tracker/sync (POST) ─────────────────────────────────────
+
+const USAGE_STORE_FILE = '/tmp/hive-usage.json'
+
+async function handleUsageSync(req, res) {
+  if (req.method !== 'POST') {
+    return jsonResponse(res, 405, { error: 'Method not allowed', code: 'METHOD_NOT_ALLOWED' })
+  }
+  if (!hasStrictHiveApiKey(req)) {
+    return jsonResponse(res, 401, { error: 'Unauthorized — X-Hive-Key required', code: 'AUTH_REQUIRED' })
+  }
+
+  const body = req.body || {}
+  const store = { ...body, pushedAt: Date.now(), ts: typeof body.ts === 'number' ? body.ts : Date.now() }
+
+  try {
+    await fs.writeFile(USAGE_STORE_FILE, JSON.stringify(store, null, 2), 'utf8')
+    console.log('[api/live/usage-tracker/sync] stored push data')
+    return jsonResponse(res, 200, { ok: true, ts: store.ts })
+  } catch (err) {
+    console.error('[api/live/usage-tracker/sync] write failed:', err.message)
+    return jsonResponse(res, 500, { error: 'Failed to store usage data', code: 'STORE_WRITE_FAILED' })
+  }
+}
+
 async function handleUsageTracker(req, res) {
+  // Check push store first (10 min freshness)
+  const pushed = readPushStore(USAGE_STORE_FILE, 600_000)
+  if (pushed) return jsonResponse(res, 200, { ...pushed, source: 'PUSH' })
+
   try {
     const liveData = await getLiveUsageData()
     if (liveData) return jsonResponse(res, 200, liveData)
@@ -395,10 +426,15 @@ async function handleUsageTracker(req, res) {
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export async function handler(req, res, slug) {
+  const route    = slug[0] || ''
+  const subroute = slug[1] || ''
+
+  // Machine-to-machine sync endpoints (no user session required — strict API key only)
+  if (route === 'usage-tracker' && subroute === 'sync') return handleUsageSync(req, res)
+
+  // All other routes require user session
   if (!requireUserSession(req, res)) return
   if (!checkHiveApiKey(req)) return unauthorizedResponse(res)
-
-  const route = slug[0] || ''
 
   if (route === 'status-panel') return handleStatusPanel(req, res)
   if (route === 'pulse') return handleStatusPanel(req, res)

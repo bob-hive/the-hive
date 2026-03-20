@@ -4,7 +4,8 @@
  */
 
 import process from 'node:process'
-import { corsHeaders, jsonResponse, requireUserSession } from './auth.js'
+import fs from 'node:fs/promises'
+import { corsHeaders, jsonResponse, requireUserSession, hasStrictHiveApiKey } from './auth.js'
 import {
   firstExistingPath,
   parseTimestamp,
@@ -14,6 +15,57 @@ import {
   readJsonlSafe,
   resolveWorkspaceLogPaths,
 } from './monitoring-observability.js'
+import { readPushStore } from './push-store.js'
+
+// ─── Push store paths ─────────────────────────────────────────────────────────
+
+const WEBSEARCH_STORE_FILE   = '/tmp/hive-websearch.json'
+const SEARCHINDEX_STORE_FILE = '/tmp/hive-searchindex.json'
+const PUSH_STALE_MS          = 10 * 60_000  // 10 min
+
+// ─── Sync handlers (POST, machine-to-machine) ─────────────────────────────────
+
+async function handleWebSearchSync(req, res) {
+  if (req.method !== 'POST') {
+    return jsonResponse(res, 405, { error: 'Method not allowed', code: 'METHOD_NOT_ALLOWED' })
+  }
+  if (!hasStrictHiveApiKey(req)) {
+    return jsonResponse(res, 401, { error: 'Unauthorized — X-Hive-Key required', code: 'AUTH_REQUIRED' })
+  }
+
+  const body  = req.body || {}
+  const store = { ...body, pushedAt: Date.now(), ts: typeof body.ts === 'number' ? body.ts : Date.now() }
+
+  try {
+    await fs.writeFile(WEBSEARCH_STORE_FILE, JSON.stringify(store, null, 2), 'utf8')
+    console.log('[api/monitoring/web-search-quota/sync] stored push data')
+    return jsonResponse(res, 200, { ok: true, ts: store.ts })
+  } catch (err) {
+    console.error('[api/monitoring/web-search-quota/sync] write failed:', err.message)
+    return jsonResponse(res, 500, { error: 'Failed to store web-search data', code: 'STORE_WRITE_FAILED' })
+  }
+}
+
+async function handleSearchIndexSync(req, res) {
+  if (req.method !== 'POST') {
+    return jsonResponse(res, 405, { error: 'Method not allowed', code: 'METHOD_NOT_ALLOWED' })
+  }
+  if (!hasStrictHiveApiKey(req)) {
+    return jsonResponse(res, 401, { error: 'Unauthorized — X-Hive-Key required', code: 'AUTH_REQUIRED' })
+  }
+
+  const body  = req.body || {}
+  const store = { ...body, pushedAt: Date.now(), ts: typeof body.ts === 'number' ? body.ts : Date.now() }
+
+  try {
+    await fs.writeFile(SEARCHINDEX_STORE_FILE, JSON.stringify(store, null, 2), 'utf8')
+    console.log('[api/monitoring/search-index-efficiency/sync] stored push data')
+    return jsonResponse(res, 200, { ok: true, ts: store.ts })
+  } catch (err) {
+    console.error('[api/monitoring/search-index-efficiency/sync] write failed:', err.message)
+    return jsonResponse(res, 500, { error: 'Failed to store search-index data', code: 'STORE_WRITE_FAILED' })
+  }
+}
 
 // ─── /api/monitoring/web-search-quota helpers ────────────────────────────────
 
@@ -47,6 +99,10 @@ function toIso(ts) {
 }
 
 async function handleWebSearchQuota(req, res) {
+  // Check push store first (10 min freshness)
+  const pushed = readPushStore(WEBSEARCH_STORE_FILE, PUSH_STALE_MS)
+  if (pushed) return jsonResponse(res, 200, { ...pushed, source: 'PUSH' })
+
   try {
     const stateFile = await firstExistingPath(resolveWorkspaceLogPaths(
       'logs/web-search-state.json',
@@ -220,6 +276,10 @@ function buildTrend(samples = [], now, bucketMs, warnMs, criticalMs) {
 }
 
 async function handleSearchIndexEfficiency(req, res) {
+  // Check push store first (10 min freshness)
+  const pushed = readPushStore(SEARCHINDEX_STORE_FILE, PUSH_STALE_MS)
+  if (pushed) return jsonResponse(res, 200, { ...pushed, source: 'PUSH' })
+
   try {
     const eventsFile = await firstExistingPath(resolveWorkspaceLogPaths(
       'logs/events.jsonl',
@@ -309,11 +369,17 @@ async function handleSearchIndexEfficiency(req, res) {
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export async function handler(req, res, slug) {
+  const route    = slug[0] || ''
+  const subroute = slug[1] || ''
+
+  // Machine-to-machine sync endpoints (no user session required — strict API key only)
+  if (route === 'web-search-quota'        && subroute === 'sync') return handleWebSearchSync(req, res)
+  if (route === 'search-index-efficiency' && subroute === 'sync') return handleSearchIndexSync(req, res)
+
+  // All other routes require user session
   if (!requireUserSession(req, res)) return
 
-  const route = slug[0] || ''
-
-  if (route === 'web-search-quota') return handleWebSearchQuota(req, res)
+  if (route === 'web-search-quota')        return handleWebSearchQuota(req, res)
   if (route === 'search-index-efficiency') return handleSearchIndexEfficiency(req, res)
 
   return jsonResponse(res, 404, { error: 'Not found', code: 'NOT_FOUND' })
