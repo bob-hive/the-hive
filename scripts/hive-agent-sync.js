@@ -33,25 +33,43 @@ const KNOWN_AGENT_IDS = ['bob', 'scout', 'forge', 'ledger', 'sentinel']
 // ─── Read gateway token ───────────────────────────────────────────────────────
 
 function readGatewayToken() {
+  // 1. Explicit env override
   if (process.env.OPENCLAW_GATEWAY_TOKEN) {
     return process.env.OPENCLAW_GATEWAY_TOKEN.trim()
   }
 
+  // 2. Device operator token (has operator.read scope — needed for RPC)
+  const deviceAuthPath = join(homedir(), '.openclaw', 'identity', 'device-auth.json')
+  if (existsSync(deviceAuthPath)) {
+    try {
+      const raw = readFileSync(deviceAuthPath, 'utf8')
+      const auth = JSON.parse(raw)
+      const operatorToken = auth.tokens?.operator?.token
+      if (operatorToken) {
+        console.log('[sync] Using device operator token (operator.read scope)')
+        return operatorToken.trim()
+      }
+    } catch (err) {
+      console.warn('[sync] Failed to read device-auth.json:', err.message)
+    }
+  }
+
+  // 3. Fallback: gateway auth token (passkey only — no scopes, RPC will likely fail)
   const configPath = join(homedir(), '.openclaw', 'openclaw.json')
   if (!existsSync(configPath)) {
-    console.error('[sync] No gateway token: set OPENCLAW_GATEWAY_TOKEN or ensure ~/.openclaw/openclaw.json exists')
+    console.error('[sync] No token found: set OPENCLAW_GATEWAY_TOKEN or ensure ~/.openclaw/identity/device-auth.json exists')
     process.exit(1)
   }
 
   try {
     const raw = readFileSync(configPath, 'utf8')
     const cfg = JSON.parse(raw)
-    // Token path: gateway.auth.token (primary) → gateway.token → gatewayToken → token
     const token = cfg.gateway?.auth?.token || cfg.gateway?.token || cfg.gatewayToken || cfg.token
     if (!token) {
-      console.error('[sync] Cannot find gateway token in ~/.openclaw/openclaw.json (looked for gateway.auth.token / gateway.token / gatewayToken / token)')
+      console.error('[sync] Cannot find gateway token in config')
       process.exit(1)
     }
+    console.warn('[sync] Using gateway auth token (no operator.read scope — RPC may fail, will fall back to disk)')
     return token.trim()
   } catch (err) {
     console.error('[sync] Failed to read ~/.openclaw/openclaw.json:', err.message)
