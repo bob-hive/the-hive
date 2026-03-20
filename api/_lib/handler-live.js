@@ -1,21 +1,15 @@
 /**
- * api/live/[[...slug]].js
- * Consolidated live-data routes to fit Vercel Hobby 12-function limit.
- *
- * Routes:
- *   GET /api/live/status-panel   → agent status panel via gateway RPC
- *   GET /api/live/pulse          → same as status-panel (alias)
- *   GET /api/live/activity-feed  → session events via gateway RPC
- *   GET /api/live/usage-tracker  → token/cost from workspace files
+ * api/_lib/handler-live.js
+ * Live data handler module — imported by mega-router api/[[...slug]].js
  */
 
 import process from 'node:process'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { checkHiveApiKey, corsHeaders, jsonResponse, requireUserSession, unauthorizedResponse } from '../_lib/auth.js'
-import { getGatewayConfig, tryGatewayRpc } from '../_lib/gateway.js'
-import { getMockActivity } from '../_lib/mock.js'
-import { getAgentStatusPanelData } from '../_lib/openclaw-service-client.js'
+import { checkHiveApiKey, jsonResponse, requireUserSession, unauthorizedResponse } from './auth.js'
+import { getGatewayConfig, tryGatewayRpc } from './gateway.js'
+import { getMockActivity } from './mock.js'
+import { getAgentStatusPanelData } from './openclaw-service-client.js'
 
 // ─── /api/live/status-panel + /api/live/pulse ───────────────────────────────
 
@@ -288,10 +282,10 @@ function parseProximityState(raw) {
 
 function parseApiUsageLog(text) {
   const entries = []
-  const sections = text.split(/^## /m).filter(Boolean)
+  const logSections = text.split(/^## /m).filter(Boolean)
 
-  for (const section of sections.slice(-8)) {
-    const lines = section.split('\n')
+  for (const logSection of logSections.slice(-8)) {
+    const lines = logSection.split('\n')
     const header = lines[0]?.trim() || ''
     const body = lines.slice(1).join('\n').trim()
     if (!header) continue
@@ -398,18 +392,12 @@ async function handleUsageTracker(req, res) {
   return jsonResponse(res, 200, buildMockUsageData())
 }
 
-// ─── Router ──────────────────────────────────────────────────────────────────
+// ─── Handler ─────────────────────────────────────────────────────────────────
 
-export default async function handler(req, res) {
-  if (req.method === 'OPTIONS') {
-    Object.entries(corsHeaders()).forEach(([k, v]) => res.setHeader(k, v))
-    return res.status(204).end()
-  }
-
+export async function handler(req, res, slug) {
   if (!requireUserSession(req, res)) return
   if (!checkHiveApiKey(req)) return unauthorizedResponse(res)
 
-  const slug = Array.isArray(req.query?.slug) ? req.query.slug : (req.query?.slug ? [req.query.slug] : [])
   const route = slug[0] || ''
 
   if (route === 'status-panel') return handleStatusPanel(req, res)

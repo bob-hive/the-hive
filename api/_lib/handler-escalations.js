@@ -1,3 +1,8 @@
+/**
+ * api/_lib/handler-escalations.js
+ * Escalations handler module — imported by mega-router api/[[...slug]].js
+ */
+
 import {
   checkHiveApiKey,
   corsHeaders,
@@ -5,19 +10,13 @@ import {
   jsonResponse,
   requireUserSession,
   unauthorizedResponse,
-} from '../_lib/auth.js'
+} from './auth.js'
 import {
   ackEscalation,
   listEscalations,
   resolveEscalationById,
   retryEscalation,
-} from '../_lib/alerts-store.js'
-
-function slugParts(req) {
-  const slug = req.query?.slug
-  if (!slug) return []
-  return Array.isArray(slug) ? slug : [slug]
-}
+} from './alerts-store.js'
 
 function authGate(req, res) {
   const machine = hasStrictHiveApiKey(req)
@@ -51,17 +50,10 @@ function handleMutationError(res, error, fallbackCode) {
   })
 }
 
-export default async function handler(req, res) {
-  if (req.method === 'OPTIONS') {
-    Object.entries(corsHeaders()).forEach(([k, v]) => res.setHeader(k, v))
-    return res.status(204).end()
-  }
-
+export async function handler(req, res, slug) {
   if (!authGate(req, res)) return
 
-  const parts = slugParts(req)
-
-  if (req.method === 'GET' && parts.length === 0) {
+  if (req.method === 'GET' && slug.length === 0) {
     const state = req.query.state ? String(req.query.state).toLowerCase() : undefined
     const target = req.query.target ? String(req.query.target).toLowerCase() : undefined
     const openOnly = String(req.query.openOnly || req.query.open_only || 'false').toLowerCase() === 'true'
@@ -87,8 +79,8 @@ export default async function handler(req, res) {
     }
   }
 
-  if (req.method === 'POST' && parts.length === 2) {
-    const [escalationId, action] = parts
+  if (req.method === 'POST' && slug.length === 2) {
+    const [escalationId, action] = slug
 
     try {
       let result

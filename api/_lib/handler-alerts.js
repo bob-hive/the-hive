@@ -1,11 +1,6 @@
 /**
- * api/alerts/[[...slug]].js
- * Consolidated alerts route to fit Vercel Hobby 12-function limit.
- *
- * Routes:
- *   GET  /api/alerts               → list alerts (formerly api/alerts.js)
- *   POST /api/alerts/ingest        → ingest new alert
- *   POST /api/alerts/:id/remediation → append remediation attempt
+ * api/_lib/handler-alerts.js
+ * Alerts handler module — imported by mega-router api/[[...slug]].js
  */
 
 import {
@@ -15,20 +10,14 @@ import {
   jsonResponse,
   requireUserSession,
   unauthorizedResponse,
-} from '../_lib/auth.js'
-import { appendRemediationAttempt, ingestAlert, listAlerts, alertStoreInfo } from '../_lib/alerts-store.js'
+} from './auth.js'
+import { appendRemediationAttempt, ingestAlert, listAlerts, alertStoreInfo } from './alerts-store.js'
 
 function requestMeta(req) {
   return {
     ip: (req.headers['x-forwarded-for'] || '').split(',')[0]?.trim() || req.headers['x-real-ip'] || 'unknown',
     ua: req.headers['user-agent'] || 'unknown',
   }
-}
-
-function slugParts(req) {
-  const slug = req.query?.slug
-  if (!slug) return []
-  return Array.isArray(slug) ? slug : [slug]
 }
 
 function authGate(req, res) {
@@ -42,13 +31,8 @@ function authGate(req, res) {
   return true
 }
 
-export default async function handler(req, res) {
-  if (req.method === 'OPTIONS') {
-    Object.entries(corsHeaders()).forEach(([k, v]) => res.setHeader(k, v))
-    return res.status(204).end()
-  }
-
-  // GET /api/alerts — list alerts (formerly api/alerts.js)
+export async function handler(req, res, slug) {
+  // GET /api/alerts — list alerts
   if (req.method === 'GET') {
     const machine = hasStrictHiveApiKey(req)
     if (!machine) {
@@ -81,9 +65,7 @@ export default async function handler(req, res) {
 
   if (!authGate(req, res)) return
 
-  const parts = slugParts(req)
-
-  if (parts.length === 1 && parts[0] === 'ingest') {
+  if (slug.length === 1 && slug[0] === 'ingest') {
     try {
       const { alert } = await ingestAlert(req.body || {}, requestMeta(req))
       return jsonResponse(res, 200, {
@@ -100,9 +82,9 @@ export default async function handler(req, res) {
     }
   }
 
-  if (parts.length === 2 && parts[1] === 'remediation') {
+  if (slug.length === 2 && slug[1] === 'remediation') {
     try {
-      const { alert } = await appendRemediationAttempt(parts[0], req.body || {}, requestMeta(req))
+      const { alert } = await appendRemediationAttempt(slug[0], req.body || {}, requestMeta(req))
       return jsonResponse(res, 200, {
         ok: true,
         alert,

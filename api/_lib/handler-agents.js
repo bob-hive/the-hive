@@ -1,15 +1,11 @@
 /**
- * api/agents/[[...slug]].js
- * Consolidated agents routes to fit Vercel Hobby 12-function limit.
- *
- * Routes:
- *   GET /api/agents/status   → agent status grid
- *   GET /api/agents/activity → recent activity feed
+ * api/_lib/handler-agents.js
+ * Agents handler module — imported by mega-router api/[[...slug]].js
  */
 
-import { tryGatewayRpc, getGatewayConfig } from '../_lib/gateway.js'
-import { getMockActivity, getMockAgentsStatus } from '../_lib/mock.js'
-import { checkHiveApiKey, jsonResponse, unauthorizedResponse, corsHeaders, requireUserSession } from '../_lib/auth.js'
+import { tryGatewayRpc, getGatewayConfig } from './gateway.js'
+import { getMockActivity, getMockAgentsStatus } from './mock.js'
+import { checkHiveApiKey, jsonResponse, unauthorizedResponse, corsHeaders, requireUserSession } from './auth.js'
 
 // ─── /api/agents/activity helpers ───────────────────────────────────────────
 
@@ -248,18 +244,12 @@ async function handleStatus(req, res) {
   }
 }
 
-// ─── Router ──────────────────────────────────────────────────────────────────
+// ─── Handler ─────────────────────────────────────────────────────────────────
 
-export default async function handler(req, res) {
-  if (req.method === 'OPTIONS') {
-    Object.entries(corsHeaders()).forEach(([k, v]) => res.setHeader(k, v))
-    return res.status(204).end()
-  }
-
+export async function handler(req, res, slug) {
   if (!requireUserSession(req, res)) return
   if (!checkHiveApiKey(req)) return unauthorizedResponse(res)
 
-  const slug = Array.isArray(req.query?.slug) ? req.query.slug : (req.query?.slug ? [req.query.slug] : [])
   const route = slug[0] || ''
 
   if (route === 'activity') return handleActivity(req, res)

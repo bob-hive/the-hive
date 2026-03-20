@@ -1,14 +1,10 @@
 /**
- * api/monitoring/[[...slug]].js
- * Consolidated monitoring routes to fit Vercel Hobby 12-function limit.
- *
- * Routes:
- *   GET /api/monitoring/web-search-quota       → web search provider health
- *   GET /api/monitoring/search-index-efficiency → search latency/p95 panels
+ * api/_lib/handler-monitoring.js
+ * Monitoring handler module — imported by mega-router api/[[...slug]].js
  */
 
 import process from 'node:process'
-import { corsHeaders, jsonResponse, requireUserSession } from '../_lib/auth.js'
+import { corsHeaders, jsonResponse, requireUserSession } from './auth.js'
 import {
   firstExistingPath,
   parseTimestamp,
@@ -17,7 +13,7 @@ import {
   readJsonSafe,
   readJsonlSafe,
   resolveWorkspaceLogPaths,
-} from '../_lib/monitoring-observability.js'
+} from './monitoring-observability.js'
 
 // ─── /api/monitoring/web-search-quota helpers ────────────────────────────────
 
@@ -310,17 +306,11 @@ async function handleSearchIndexEfficiency(req, res) {
   }
 }
 
-// ─── Router ──────────────────────────────────────────────────────────────────
+// ─── Handler ─────────────────────────────────────────────────────────────────
 
-export default async function handler(req, res) {
-  if (req.method === 'OPTIONS') {
-    Object.entries(corsHeaders()).forEach(([k, v]) => res.setHeader(k, v))
-    return res.status(204).end()
-  }
-
+export async function handler(req, res, slug) {
   if (!requireUserSession(req, res)) return
 
-  const slug = Array.isArray(req.query?.slug) ? req.query.slug : (req.query?.slug ? [req.query.slug] : [])
   const route = slug[0] || ''
 
   if (route === 'web-search-quota') return handleWebSearchQuota(req, res)
