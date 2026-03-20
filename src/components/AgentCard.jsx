@@ -1,9 +1,11 @@
+import { CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { formatUptime, relativeTime } from '../data/mock'
 
 const STATUS_LABEL = {
   online: 'Online',
   busy: 'Busy',
   idle: 'Idle',
+  offline: 'Offline',
   error: 'Error',
 }
 
@@ -73,18 +75,71 @@ const SPARKLINE_COLOR = {
   error: 'var(--color-error)',
 }
 
+// Task progress indicator
+function TaskProgress({ status }) {
+  if (status === 'running' || status === 'busy') {
+    return (
+      <Loader2
+        size={12}
+        style={{ color: 'var(--color-busy)', animation: 'spin 1.2s linear infinite', flexShrink: 0 }}
+      />
+    )
+  }
+  if (status === 'success' || status === 'done') {
+    return <CheckCircle2 size={12} style={{ color: 'var(--color-online)', flexShrink: 0 }} />
+  }
+  if (status === 'error' || status === 'failed') {
+    return <XCircle size={12} style={{ color: 'var(--color-error)', flexShrink: 0 }} />
+  }
+  return null
+}
+
+// Card border/glow style based on agent status
+function getCardStyle(status, staleLevel) {
+  if (status === 'busy') {
+    return {
+      borderColor: 'rgba(245,158,11,0.5)',
+      boxShadow: '0 0 16px rgba(245,158,11,0.12)',
+    }
+  }
+  if (status === 'idle') {
+    return {
+      borderColor: 'rgba(245,158,11,0.25)',
+    }
+  }
+  if (status === 'offline') {
+    return {
+      opacity: 0.65,
+    }
+  }
+  if (staleLevel === 'red') {
+    return { borderColor: 'rgba(239,68,68,0.4)' }
+  }
+  if (staleLevel === 'amber') {
+    return { borderColor: 'rgba(245,158,11,0.35)' }
+  }
+  return {}
+}
+
 export default function AgentCard({ agent, index }) {
   const delay = ['delay-100', 'delay-200', 'delay-300', 'delay-400', 'delay-500'][index % 5]
   const sparkColor = SPARKLINE_COLOR[agent.status] ?? 'var(--color-accent)'
-  const staleLevel = agent.status === 'online' ? getStaleness(agent.lastActiveMs) : null
+  const staleLevel = getStaleness(agent.lastActiveMs)
   const lastSeenLabel = agent.lastActiveMs ? relativeTime(agent.lastActiveMs) : null
+  const cardStyle = getCardStyle(agent.status, staleLevel)
+
+  // Sub-steps support
+  const subSteps = Array.isArray(agent.subSteps) ? agent.subSteps : []
 
   return (
-    <div className={`card p-5 flex flex-col gap-4 animate-slide-up ${delay}`}>
+    <div
+      className={`card p-5 flex flex-col gap-4 animate-slide-up ${delay}`}
+      style={cardStyle}
+    >
       {/* Top row — avatar + name + status */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          {/* Avatar with optional heartbeat ring for online agents */}
+          {/* Avatar with status ring */}
           <div className="relative flex-shrink-0">
             <div
               className="text-2xl w-10 h-10 rounded-xl flex items-center justify-center"
@@ -94,6 +149,12 @@ export default function AgentCard({ agent, index }) {
             </div>
             {agent.status === 'online' && (
               <span className="agent-heartbeat-ring" />
+            )}
+            {agent.status === 'busy' && (
+              <span
+                className="agent-heartbeat-ring"
+                style={{ borderColor: 'var(--color-busy)', animation: 'heartbeat-ring 1.4s ease-out infinite' }}
+              />
             )}
           </div>
           <div>
@@ -106,20 +167,49 @@ export default function AgentCard({ agent, index }) {
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={`status-dot ${agent.status}${agent.status === 'online' ? ' pulse' : ''}`} />
+          <span
+            className={`status-dot ${agent.status}${
+              agent.status === 'online' || agent.status === 'busy' ? ' pulse' : ''
+            }`}
+          />
           <span className={`tag ${agent.status}`}>{STATUS_LABEL[agent.status] ?? agent.status}</span>
         </div>
       </div>
 
-      {/* Current task */}
+      {/* Current task — prominent when busy */}
       <div
-        className="rounded-lg px-3 py-2.5 text-xs leading-relaxed min-h-[40px] flex items-center"
-        style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-secondary)' }}
+        className="rounded-lg px-3 py-2.5 text-xs leading-relaxed min-h-[40px]"
+        style={{
+          background: agent.status === 'busy'
+            ? 'rgba(245,158,11,0.08)'
+            : 'var(--color-surface-2)',
+          border: agent.status === 'busy' ? '1px solid rgba(245,158,11,0.25)' : '1px solid transparent',
+          color: 'var(--color-text-secondary)',
+        }}
       >
-        {agent.currentTask || (
+        {agent.currentTask ? (
+          <div className="flex items-start gap-2">
+            <TaskProgress status={agent.status} />
+            <span className={agent.status === 'busy' ? 'font-medium' : ''}>
+              {agent.currentTask}
+            </span>
+          </div>
+        ) : (
           <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>No active task</span>
         )}
       </div>
+
+      {/* Sub-steps list */}
+      {subSteps.length > 0 && (
+        <ul className="space-y-1">
+          {subSteps.map((step, i) => (
+            <li key={i} className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              <TaskProgress status={step.status} />
+              <span className={step.status === 'running' ? 'font-medium' : ''}>{step.label}</span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {/* Load bar + sparkline */}
       <div className="flex items-end justify-between gap-3">
@@ -131,7 +221,17 @@ export default function AgentCard({ agent, index }) {
             </span>
           </div>
           <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${agent.load}%` }} />
+            <div
+              className="progress-fill"
+              style={{
+                width: `${agent.load}%`,
+                background: agent.status === 'busy'
+                  ? 'var(--color-busy)'
+                  : agent.status === 'error'
+                  ? 'var(--color-error)'
+                  : undefined,
+              }}
+            />
           </div>
         </div>
         <div className="flex-shrink-0 pb-0.5">

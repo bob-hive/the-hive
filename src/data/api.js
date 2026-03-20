@@ -8,7 +8,8 @@
 import { generateMockDashboardData } from './mock.js'
 
 const MOCK_MODE = import.meta.env.VITE_MOCK_MODE === 'true'
-const ENABLE_REALTIME_STATUS_PANEL = import.meta.env.VITE_ENABLE_REALTIME_STATUS_PANEL === 'true'
+// Default to true (enabled); only disable if explicitly set to 'false'
+const ENABLE_REALTIME_STATUS_PANEL = import.meta.env.VITE_ENABLE_REALTIME_STATUS_PANEL !== 'false'
 const API_KEY = import.meta.env.VITE_HIVE_API_KEY || ''
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 

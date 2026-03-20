@@ -19,13 +19,16 @@ import ProjectsHub from './components/ProjectsHub'
 import Footer from './components/Footer'
 import ActivityFeed from './components/ActivityFeed'
 import UsageTracker from './components/UsageTracker'
+import ChannelActivityPanel from './components/ChannelActivityPanel'
+import OvernightBriefing from './components/OvernightBriefing'
 import { ApiError, fetchAuthState, fetchDashboardData } from './data/api'
 import { usePolling } from './hooks/usePolling'
 
 const POLL_INTERVAL_MS = parseInt(import.meta.env.VITE_POLL_INTERVAL_MS || '10000', 10)
-const ENABLE_REALTIME_STATUS_PANEL = import.meta.env.VITE_ENABLE_REALTIME_STATUS_PANEL === 'true'
-const ENABLE_ACTIVITY_FEED = import.meta.env.VITE_ENABLE_ACTIVITY_FEED === 'true'
-const ENABLE_USAGE_TRACKER = import.meta.env.VITE_ENABLE_USAGE_TRACKER === 'true'
+// Feature flags default to true — set to 'false' in env to disable
+const ENABLE_REALTIME_STATUS_PANEL = import.meta.env.VITE_ENABLE_REALTIME_STATUS_PANEL !== 'false'
+const ENABLE_ACTIVITY_FEED = import.meta.env.VITE_ENABLE_ACTIVITY_FEED !== 'false'
+const ENABLE_USAGE_TRACKER = import.meta.env.VITE_ENABLE_USAGE_TRACKER !== 'false'
 
 function AuthScreen({
   title,
@@ -358,14 +361,19 @@ function Dashboard() {
 
             <AlertFeed alerts={dashboard.alerts} meta={dashboard.alertsMeta} />
 
-            <MetricsBar metrics={dashboard.metrics} />
+            <MetricsBar
+              metrics={dashboard.metrics}
+              agents={dashboard.agents}
+              events={dashboard.events}
+            />
 
             <JobsSummaryCard summary={dashboard.jobsSummary} />
 
-            {ENABLE_REALTIME_STATUS_PANEL ? (
+            {/* Agent status: always show cards grid; also show compact panel when enabled */}
+            <AgentGrid agents={dashboard.agents} />
+
+            {ENABLE_REALTIME_STATUS_PANEL && dashboard.realtimeStatusPanel?.agents?.length > 0 && (
               <RealTimeStatusPanel panel={dashboard.realtimeStatusPanel} />
-            ) : (
-              <AgentGrid agents={dashboard.agents} />
             )}
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -386,12 +394,19 @@ function Dashboard() {
 
             <ClawHubPanel />
 
-            {ENABLE_ACTIVITY_FEED || ENABLE_USAGE_TRACKER ? (
+            {/* Activity Feed + Usage Tracker */}
+            {(ENABLE_ACTIVITY_FEED || ENABLE_USAGE_TRACKER) && (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 {ENABLE_ACTIVITY_FEED && <ActivityFeed />}
                 {ENABLE_USAGE_TRACKER && <UsageTracker />}
               </div>
-            ) : null}
+            )}
+
+            {/* Channel Activity + Overnight Briefing */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <ChannelActivityPanel />
+              <OvernightBriefing />
+            </div>
           </>
         )}
       </main>
