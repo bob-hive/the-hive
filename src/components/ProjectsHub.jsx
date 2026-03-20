@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, CalendarClock, CircleAlert, CircleCheck, CircleDashed, Clock3, UserRound } from 'lucide-react'
-import { getProjectById, getProjectsData, listProjects } from '../data/projects'
+import { fetchProjectsData, getProjectById, getProjectsData, listProjects } from '../data/projects'
 
 const PROJECT_QUERY_PARAM = 'project'
 
@@ -159,10 +159,19 @@ function ProjectDetail({ project, onBack }) {
 }
 
 export default function ProjectsHub() {
-  const projectsData = useMemo(() => getProjectsData(), [])
-  const projects = useMemo(() => listProjects(), [])
+  const [liveData, setLiveData] = useState(null)
   const [selectedProjectId, setSelectedProjectId] = useState(getSelectedProjectIdFromUrl)
   const [showClosed, setShowClosed] = useState(false)
+
+  // Fetch live project data on mount
+  useEffect(() => {
+    fetchProjectsData().then((data) => {
+      if (data) setLiveData(data)
+    }).catch(() => {/* fallback to seed */})
+  }, [])
+
+  const projectsData = useMemo(() => liveData ?? getProjectsData(), [liveData])
+  const projects = useMemo(() => listProjects(liveData ?? undefined), [liveData])
 
   useEffect(() => {
     const onPopState = () => setSelectedProjectId(getSelectedProjectIdFromUrl())
@@ -171,8 +180,8 @@ export default function ProjectsHub() {
   }, [])
 
   const selectedProject = useMemo(
-    () => getProjectById(selectedProjectId),
-    [selectedProjectId],
+    () => getProjectById(selectedProjectId, liveData ?? undefined),
+    [selectedProjectId, liveData],
   )
 
   const filteredProjects = useMemo(() => {
@@ -229,13 +238,13 @@ export default function ProjectsHub() {
 
       <div className="card p-5 mb-4">
         <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-          Planning label: <strong>{projectsData.planning.label}</strong>
+          Planning label: <strong>{projectsData.planning?.label || 'Planning Session Board'}</strong>
         </p>
         <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-          Source: {projectsData.planning.source}
+          Source: {projectsData.source === 'workspace_live' ? '🟢 Live (PROJECTS.md via Gateway)' : projectsData.planning?.source || 'Static seed'}
         </p>
         <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-          {projectsData.planning.updateCadence}
+          {projectsData.planning?.updateCadence || ''}
         </p>
       </div>
 

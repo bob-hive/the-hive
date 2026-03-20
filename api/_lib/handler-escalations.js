@@ -17,6 +17,7 @@ import {
   resolveEscalationById,
   retryEscalation,
 } from './alerts-store.js'
+import { getWorkspaceEscalations } from './workspace-reader.js'
 
 function authGate(req, res) {
   const machine = hasStrictHiveApiKey(req)
@@ -59,15 +60,31 @@ export async function handler(req, res, slug) {
     const openOnly = String(req.query.openOnly || req.query.open_only || 'false').toLowerCase() === 'true'
 
     try {
-      const result = await listEscalations({
-        state,
-        target,
-        openOnly,
-        limit: req.query.limit,
-      })
+      const [storeResult, workspaceEscalations] = await Promise.allSettled([
+        listEscalations({ state, target, openOnly, limit: req.query.limit }),
+        getWorkspaceEscalations(),
+      ])
+
+      const result = storeResult.status === 'fulfilled'
+        ? storeResult.value
+        : { escalations: [], updatedAt: null, source: 'LIVE', dispatchMode: 'dry-run' }
+
+      const wsEscalations = workspaceEscalations.status === 'fulfilled'
+        ? workspaceEscalations.value
+        : []
+
+      // Merge workspace escalations: prepend so they appear first in the Bob Queue
+      // Apply same openOnly filter to synthetic items
+      const filteredWs = openOnly
+        ? wsEscalations.filter((e) => e.state !== 'resolved')
+        : wsEscalations
+
+      const merged = [...filteredWs, ...result.escalations]
 
       return jsonResponse(res, 200, {
         ...result,
+        escalations: merged,
+        workspaceEscalationCount: filteredWs.length,
         ts: Date.now(),
       })
     } catch (error) {

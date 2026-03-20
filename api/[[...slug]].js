@@ -18,6 +18,7 @@ import { handler as alertsHandler } from './_lib/handler-alerts.js'
 import { handler as escalationsHandler } from './_lib/handler-escalations.js'
 import { handler as liveHandler } from './_lib/handler-live.js'
 import { handler as monitoringHandler } from './_lib/handler-monitoring.js'
+import { handler as projectsHandler } from './_lib/handler-projects.js'
 
 /**
  * Parse the URL path into [section, ...rest] where section is the first
@@ -59,6 +60,9 @@ export default async function handler(req, res) {
 
     case 'monitoring':
       return monitoringHandler(req, res, slug)
+
+    case 'projects':
+      return projectsHandler(req, res, slug)
 
     default:
       return jsonResponse(res, 404, { error: 'Not found', code: 'NOT_FOUND' })
