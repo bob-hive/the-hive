@@ -90,7 +90,7 @@ export async function gatewayRpc({ gatewayUrl, token, method, params = {} }) {
             instanceId: `hive-api-${Date.now()}`,
           },
           role: 'operator',
-          scopes: ['operator.admin'],
+          scopes: ['operator.admin', 'operator.read'],
           caps: [],
           auth: { token },
         }
