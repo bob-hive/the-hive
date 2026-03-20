@@ -13,6 +13,7 @@
  */
 
 import { corsHeaders, jsonResponse } from './_lib/auth.js'
+import { getGatewayConfig, tryGatewayRpc } from './_lib/gateway.js'
 import { handler as agentsHandler } from './_lib/handler-agents.js'
 import { handler as alertsHandler } from './_lib/handler-alerts.js'
 import { handler as escalationsHandler } from './_lib/handler-escalations.js'
@@ -63,6 +64,25 @@ export default async function handler(req, res) {
 
     case 'projects':
       return projectsHandler(req, res, slug)
+
+    case 'debug-gateway': {
+      const cfg = getGatewayConfig()
+      if (!cfg) {
+        return jsonResponse(res, 200, {
+          ok: false,
+          reason: 'getGatewayConfig() returned null',
+          hasUrl: !!process.env.OPENCLAW_GATEWAY_URL,
+          hasToken: !!process.env.OPENCLAW_API_TOKEN,
+          urlPrefix: (process.env.OPENCLAW_GATEWAY_URL || '').slice(0, 20),
+        })
+      }
+      try {
+        const result = await tryGatewayRpc('agents.list')
+        return jsonResponse(res, 200, { ok: true, agents: result, urlPrefix: cfg.url.slice(0, 20) })
+      } catch (e) {
+        return jsonResponse(res, 200, { ok: false, error: e.message, urlPrefix: cfg.url.slice(0, 20) })
+      }
+    }
 
     default:
       return jsonResponse(res, 404, { error: 'Not found', code: 'NOT_FOUND' })
