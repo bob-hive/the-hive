@@ -177,7 +177,7 @@ export default function ProjectsHub() {
 
   const filteredProjects = useMemo(() => {
     return projects.filter(p => {
-      const isClosed = p.ragStatus === 'green' || p.status === 'closed' || p.status === 'completed';
+      const isClosed = p.closed === true || p.status === 'closed' || p.status === 'completed';
       return showClosed ? isClosed : !isClosed;
     })
   }, [projects, showClosed])

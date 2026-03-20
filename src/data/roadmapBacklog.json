@@ -1,31 +1,37 @@
 {
   "project": "Master Roadmap",
   "title": "Backlog / Discuss with Ani",
-  "description": "Active and queued projects synced from PROJECTS.md.",
+  "description": "Active next-action items requiring Ani's input or decision.",
   "items": [
     {
-      "id": "p10-roleranger",
-      "title": "Project 10: RoleRanger 🎯",
-      "detail": "AI-powered job hunt and application monitoring for Product Manager lane.",
-      "tag": "Active"
+      "id": "p9-tk-website-review",
+      "title": "TK Website Review",
+      "detail": "Review TurnKey Listing Media website on Vercel. Approve Phase 2 scope (booking, payments, integrations).",
+      "tag": "Waiting on Ani"
     },
     {
-      "id": "p4-skills",
-      "title": "Project 4: Additional Skills",
-      "detail": "Capability gap audit and high-value skill installation from ClawHub.",
-      "tag": "Backlog"
+      "id": "p10-roleranger-oauth",
+      "title": "RoleRanger Gmail OAuth",
+      "detail": "Provide Gmail OAuth redirect URL for RoleRanger job hunt agent.",
+      "tag": "Blocked"
     },
     {
-      "id": "p6-notion",
-      "title": "Project 6: Notion Integration",
-      "detail": "Discovery and auth groundwork for Notion-backed planning docs.",
-      "tag": "Queued"
+      "id": "p11-tk-voice-test",
+      "title": "TK Voice E2E Test",
+      "detail": "Port conflict needs resolution before end-to-end voice call testing.",
+      "tag": "Blocked"
     },
     {
-      "id": "p8-whatsapp",
-      "title": "Project 8: WhatsApp Social",
-      "detail": "Validate wacli setup and align on tone, recipients, and boundaries.",
-      "tag": "Discovery"
+      "id": "p3-hive-live-data",
+      "title": "Hive Live Data Wiring",
+      "detail": "Approve alert bridge cron to keep Hive alert feed fresh with real data.",
+      "tag": "Waiting on Ani"
+    },
+    {
+      "id": "p11-crm-templates",
+      "title": "CRM Template Preferences",
+      "detail": "Confirm CRM template preferences from Google Drive folder.",
+      "tag": "Waiting on Ani"
     }
   ]
 }

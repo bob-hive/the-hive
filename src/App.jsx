@@ -340,12 +340,9 @@ function Dashboard() {
               onRefresh={refresh}
             />
 
-            <AlertFeed alerts={dashboard.alerts} meta={dashboard.alertsMeta} />
+            <BacklogPanel />
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <WebSearchQuotaHealthPanel data={dashboard.webSearchQuota} />
-              <SearchIndexEfficiencyPanel data={dashboard.searchIndexEfficiency} />
-            </div>
+            <AlertFeed alerts={dashboard.alerts} meta={dashboard.alertsMeta} />
 
             <MetricsBar metrics={dashboard.metrics} />
 
@@ -362,13 +359,18 @@ function Dashboard() {
               <Timeline tasks={dashboard.tasks} agents={dashboard.agents} />
             </div>
 
-            <JobsOperationsPanel jobs={dashboard.jobs} />
+            <ProjectsHub />
 
             <Trends trends={dashboard.trends} />
 
-            <ProjectsHub />
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <WebSearchQuotaHealthPanel data={dashboard.webSearchQuota} />
+              <SearchIndexEfficiencyPanel data={dashboard.searchIndexEfficiency} />
+            </div>
 
-            <BacklogPanel />
+            <JobsOperationsPanel jobs={dashboard.jobs} />
+
+            <ClawHubPanel />
 
             {ENABLE_ACTIVITY_FEED || ENABLE_USAGE_TRACKER ? (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -376,8 +378,6 @@ function Dashboard() {
                 {ENABLE_USAGE_TRACKER && <UsageTracker />}
               </div>
             ) : null}
-
-            <ClawHubPanel />
           </>
         )}
       </main>
