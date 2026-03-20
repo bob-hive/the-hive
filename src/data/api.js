@@ -131,13 +131,16 @@ export async function fetchDashboardData() {
   const searchIndexEfficiency = searchIndexEfficiencyRes.status === 'fulfilled' ? searchIndexEfficiencyRes.value : null
   const realtimeStatusPanel = realtimeStatusPanelRes?.status === 'fulfilled' ? realtimeStatusPanelRes.value : null
 
+  // isMock is only true when ALL data sources are mock
+  const agentSource = agentsRes.value?.source || (agentsRes.value?.mock ? 'MOCK' : 'LIVE')
+  const activitySource = activityRes.value?.source || (activityRes.value?.mock ? 'MOCK' : 'LIVE')
+  const alertsSource = alertsRes.value?.source || (alertsRes.value?.mock ? 'MOCK' : 'LIVE')
+
   const isMock = Boolean(
-    alertsRes.value?.mock ||
-    escalationsRes.value?.mock ||
-    agentsRes.value?.mock ||
-    statsRes.value?.mock ||
-    jobsRes.value?.mock ||
-    realtimeStatusPanelRes?.value?.mock
+    agentsRes.value?.mock &&
+    activityRes.value?.mock &&
+    (alertsRes.value?.mock || alerts.length === 0) &&
+    statsRes.value?.mock
   )
   const metrics = {
     tasksCompletedToday: stats.tasksCompletedToday ?? 0,
@@ -227,8 +230,22 @@ export async function fetchDashboardData() {
     escalations,
     sessions,
     metrics,
+    agentsMeta: {
+      source: agentSource,
+      isMock: Boolean(agentsRes.value?.mock),
+      ts: agentsRes.value?.ts || Date.now(),
+      pushedAt: agentsRes.value?.pushedAt || null,
+      staleMs: agentsRes.value?.staleMs || null,
+    },
+    activityMeta: {
+      source: activitySource,
+      isMock: Boolean(activityRes.value?.mock),
+      ts: activityRes.value?.ts || Date.now(),
+      pushedAt: activityRes.value?.pushedAt || null,
+      staleMs: activityRes.value?.staleMs || null,
+    },
     alertsMeta: {
-      source: alertsRes.value?.source || (alerts.length > 0 ? 'LIVE' : 'MOCK'),
+      source: alertsSource,
       isMock: Boolean(alertsRes.value?.mock || alerts.length === 0),
       latestTs: alertsRes.value?.latestTs || 0,
       ts: alertsRes.value?.ts || Date.now(),

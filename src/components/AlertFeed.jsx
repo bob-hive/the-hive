@@ -202,16 +202,21 @@ export default function AlertFeed({ alerts = [], meta = {} }) {
         <h2 className="section-title">Alerts — Signal vs Noise</h2>
 
         <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          <span
-            className="inline-flex items-center gap-1 rounded-full px-2 py-1"
-            style={{
-              background: meta.isMock ? 'rgba(245,158,11,0.12)' : 'rgba(16,185,129,0.12)',
-              color: meta.isMock ? '#b45309' : '#047857',
-            }}
-          >
-            <CircleDot size={11} />
-            {meta.isMock ? 'MOCK' : 'LIVE'}
-          </span>
+          {(() => {
+            const source = meta.source || (meta.isMock ? 'MOCK' : 'LIVE')
+            const isStaleSource = source === 'STALE' || (meta.pushedAt && Date.now() - meta.pushedAt > 5 * 60_000)
+            const isMockSource = source === 'MOCK' || meta.isMock
+            const label = isMockSource ? '🔴 MOCK' : isStaleSource ? '🟡 STALE' : '🟢 LIVE'
+            const bg = isMockSource ? 'rgba(245,158,11,0.12)' : isStaleSource ? 'rgba(245,158,11,0.12)' : 'rgba(16,185,129,0.12)'
+            const color = isMockSource ? '#b45309' : isStaleSource ? '#92400e' : '#047857'
+            return (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-1"
+                style={{ background: bg, color }}>
+                <CircleDot size={11} />
+                {label}
+              </span>
+            )
+          })()}
           <span>Freshness: {freshnessTs ? relativeTime(freshnessTs) : '—'}</span>
         </div>
       </div>

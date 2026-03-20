@@ -262,6 +262,20 @@ function Dashboard() {
       agents: [],
       ts: 0,
     },
+    agentsMeta: {
+      source: 'MOCK',
+      isMock: true,
+      ts: 0,
+      pushedAt: null,
+      staleMs: null,
+    },
+    activityMeta: {
+      source: 'MOCK',
+      isMock: true,
+      ts: 0,
+      pushedAt: null,
+      staleMs: null,
+    },
     alertsMeta: {
       source: 'MOCK',
       isMock: true,
@@ -355,7 +369,7 @@ function Dashboard() {
             )}
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <LiveFeed agents={dashboard.agents} events={dashboard.events} />
+              <LiveFeed agents={dashboard.agents} events={dashboard.events} meta={dashboard.activityMeta} />
               <Timeline tasks={dashboard.tasks} agents={dashboard.agents} />
             </div>
 

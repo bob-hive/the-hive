@@ -3,6 +3,7 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
+    { "source": "/api/agents/sync", "destination": "/api/[[...slug]]" },
     { "source": "/api/agents/:path*", "destination": "/api/[[...slug]]" },
     { "source": "/api/alerts/:path*", "destination": "/api/[[...slug]]" },
     { "source": "/api/escalations/:path*", "destination": "/api/[[...slug]]" },

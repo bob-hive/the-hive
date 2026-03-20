@@ -1,11 +1,76 @@
 /**
  * api/_lib/handler-agents.js
  * Agents handler module — imported by mega-router api/[[...slug]].js
+ *
+ * Data priority:
+ *   1. PUSH store — /tmp/hive-agents.json (pushed from local sync script, < 10 min)
+ *   2. Gateway RPC — live WS call to OpenClaw gateway (usually fails from Vercel)
+ *   3. Mock — static fallback data
  */
 
+import fs from 'node:fs/promises'
+import process from 'node:process'
 import { tryGatewayRpc, getGatewayConfig } from './gateway.js'
 import { getMockActivity, getMockAgentsStatus } from './mock.js'
-import { checkHiveApiKey, jsonResponse, unauthorizedResponse, corsHeaders, requireUserSession } from './auth.js'
+import { checkHiveApiKey, hasStrictHiveApiKey, jsonResponse, unauthorizedResponse, corsHeaders, requireUserSession } from './auth.js'
+
+// ─── Push store ──────────────────────────────────────────────────────────────
+
+const AGENTS_STORE_FILE = '/tmp/hive-agents.json'
+const PUSH_STALE_MS = 10 * 60_000  // 10 min: treat pushed data as stale / fall back to RPC/mock
+
+async function readPushStore() {
+  try {
+    const raw = await fs.readFile(AGENTS_STORE_FILE, 'utf8')
+    const data = JSON.parse(raw)
+    if (!data || typeof data !== 'object') return null
+    return data
+  } catch {
+    return null
+  }
+}
+
+async function writePushStore(data) {
+  await fs.writeFile(AGENTS_STORE_FILE, JSON.stringify(data, null, 2), 'utf8')
+}
+
+function isFresh(store) {
+  if (!store?.ts) return false
+  return Date.now() - Number(store.ts) < PUSH_STALE_MS
+}
+
+// ─── handleSync (POST /api/agents/sync) ──────────────────────────────────────
+
+async function handleSync(req, res) {
+  if (req.method !== 'POST') {
+    return jsonResponse(res, 405, { error: 'Method not allowed', code: 'METHOD_NOT_ALLOWED' })
+  }
+
+  if (!hasStrictHiveApiKey(req)) {
+    return jsonResponse(res, 401, { error: 'Unauthorized — X-Hive-Key required', code: 'AUTH_REQUIRED' })
+  }
+
+  const body = req.body || {}
+  if (!Array.isArray(body.agents) && !Array.isArray(body.events)) {
+    return jsonResponse(res, 400, { error: 'Body must include agents and/or events arrays', code: 'INVALID_BODY' })
+  }
+
+  const store = {
+    agents: Array.isArray(body.agents) ? body.agents : [],
+    events: Array.isArray(body.events) ? body.events : [],
+    ts: typeof body.ts === 'number' ? body.ts : Date.now(),
+    pushedAt: Date.now(),
+  }
+
+  try {
+    await writePushStore(store)
+    console.log(`[api/agents/sync] stored ${store.agents.length} agents, ${store.events.length} events`)
+    return jsonResponse(res, 200, { ok: true, agents: store.agents.length, events: store.events.length, ts: store.ts })
+  } catch (err) {
+    console.error('[api/agents/sync] write failed:', err.message)
+    return jsonResponse(res, 500, { error: 'Failed to store agent data', code: 'STORE_WRITE_FAILED' })
+  }
+}
 
 // ─── /api/agents/activity helpers ───────────────────────────────────────────
 
@@ -121,41 +186,67 @@ function nameFromId(agentId) {
   return agentId.charAt(0).toUpperCase() + agentId.slice(1)
 }
 
+function sessionsToEvents(sessions) {
+  return sessions
+    .map((session, idx) => ({ ...session, __ts: sessionTimestamp(session) || (Date.now() - idx * 1000) }))
+    .sort((a, b) => (b.__ts || 0) - (a.__ts || 0))
+    .slice(0, 30)
+    .map((session, i) => {
+      const agentId = agentIdFromSession(session)
+      const eventType = eventTypeFromSession(session)
+      const baseId = session.id || session.sessionId || session.key || `session-${i}`
+
+      return {
+        id: `ev-${String(baseId).replace(/[^a-z0-9]/gi, '-')}-${i}`,
+        type: eventType,
+        agentId,
+        agentName: nameFromId(agentId),
+        timestamp: session.__ts || Date.now(),
+        message: messageFromSession(session, eventType),
+      }
+    })
+}
+
 async function handleActivity(req, res) {
-  const isMock = !getGatewayConfig()
-
-  if (isMock) {
-    return jsonResponse(res, 200, { events: getMockActivity(), mock: true, ts: Date.now() })
+  // 1. Try push store first
+  const store = await readPushStore()
+  if (store && isFresh(store) && Array.isArray(store.events) && store.events.length > 0) {
+    return jsonResponse(res, 200, {
+      events: store.events,
+      mock: false,
+      source: 'PUSH',
+      ts: store.ts,
+      pushedAt: store.pushedAt,
+    })
   }
 
-  try {
-    const result = await tryGatewayRpc('sessions.list', { limit: 50, activeMinutes: 24 * 60 })
-    const sessions = result?.sessions ?? (Array.isArray(result) ? result : [])
-
-    const events = sessions
-      .map((session, idx) => ({ ...session, __ts: sessionTimestamp(session) || (Date.now() - idx * 1000) }))
-      .sort((a, b) => (b.__ts || 0) - (a.__ts || 0))
-      .slice(0, 30)
-      .map((session, i) => {
-        const agentId = agentIdFromSession(session)
-        const eventType = eventTypeFromSession(session)
-        const baseId = session.id || session.sessionId || session.key || `session-${i}`
-
-        return {
-          id: `ev-${String(baseId).replace(/[^a-z0-9]/gi, '-')}-${i}`,
-          type: eventType,
-          agentId,
-          agentName: nameFromId(agentId),
-          timestamp: session.__ts || Date.now(),
-          message: messageFromSession(session, eventType),
-        }
-      })
-
-    return jsonResponse(res, 200, { events, mock: false, ts: Date.now() })
-  } catch (err) {
-    console.error('[api/agents/activity] error:', err.message)
-    return jsonResponse(res, 200, { events: getMockActivity(), mock: true, error: err.message, ts: Date.now() })
+  // 2. Try stale push store with STALE source badge
+  if (store && Array.isArray(store.events) && store.events.length > 0) {
+    const ageMs = Date.now() - Number(store.ts || 0)
+    return jsonResponse(res, 200, {
+      events: store.events,
+      mock: false,
+      source: 'STALE',
+      staleMs: ageMs,
+      ts: store.ts,
+      pushedAt: store.pushedAt,
+    })
   }
+
+  // 3. Gateway RPC fallback
+  if (getGatewayConfig()) {
+    try {
+      const result = await tryGatewayRpc('sessions.list', { limit: 50, activeMinutes: 24 * 60 })
+      const sessions = result?.sessions ?? (Array.isArray(result) ? result : [])
+      const events = sessionsToEvents(sessions)
+      return jsonResponse(res, 200, { events, mock: false, source: 'RPC', ts: Date.now() })
+    } catch (err) {
+      console.error('[api/agents/activity] RPC error:', err.message)
+    }
+  }
+
+  // 4. Mock fallback
+  return jsonResponse(res, 200, { events: getMockActivity(), mock: true, source: 'MOCK', ts: Date.now() })
 }
 
 // ─── /api/agents/status helpers ─────────────────────────────────────────────
@@ -190,67 +281,95 @@ function deriveStatus(agentId, sessions) {
 }
 
 async function handleStatus(req, res) {
-  const isMock = !getGatewayConfig()
-
-  if (isMock) {
-    return jsonResponse(res, 200, { agents: getMockAgentsStatus(), mock: true, ts: Date.now() })
-  }
-
-  try {
-    const [agentsResult, sessionsResult] = await Promise.allSettled([
-      tryGatewayRpc('agents.list'),
-      tryGatewayRpc('sessions.list', { limit: 100, activeMinutes: 60 }),
-    ])
-
-    const agentList = agentsResult.status === 'fulfilled' ? (agentsResult.value?.agents ?? []) : []
-    const sessionList = sessionsResult.status === 'fulfilled'
-      ? (sessionsResult.value?.sessions ?? sessionsResult.value ?? []) : []
-
-    const agents = agentList.map((agent, i) => {
-      const agentId = agent.id || agent.agentId || `agent-${i}`
-      const status = deriveStatus(agentId, sessionList)
-
-      const agentSessions = sessionList
-        .filter((s) => (s.key || '').includes(`agent:${agentId}:`) || s.agentId === agentId)
-        .sort((a, b) => (b.lastActiveMs || 0) - (a.lastActiveMs || 0))
-
-      const mostRecent = agentSessions[0]
-      const currentTask = mostRecent ? describeSession(mostRecent) : null
-      const lastActiveMs = mostRecent?.lastActiveMs || agent.lastActiveMs || null
-
-      return {
-        id: agentId,
-        name: agent.name || agent.displayName || agentId,
-        role: agent.role || 'Agent',
-        avatar: agent.avatar || agent.emoji || '🤖',
-        status,
-        tasksCompleted: agent.tasksCompleted || 0,
-        tasksRunning: agentSessions.filter((s) => {
-          const now = Date.now()
-          return s.lastActiveMs && now - s.lastActiveMs < 2 * 60_000
-        }).length,
-        currentTask: currentTask || '',
-        uptime: agent.uptime || 0,
-        load: status === 'busy' ? 75 : status === 'online' ? 30 : 5,
-        lastActiveMs,
-        sparkline: [30, 30, 30, 30, 30, 30, 30, status === 'busy' ? 75 : 30],
-      }
+  // 1. Try push store first
+  const store = await readPushStore()
+  if (store && isFresh(store) && Array.isArray(store.agents) && store.agents.length > 0) {
+    return jsonResponse(res, 200, {
+      agents: store.agents,
+      mock: false,
+      source: 'PUSH',
+      ts: store.ts,
+      pushedAt: store.pushedAt,
     })
-
-    return jsonResponse(res, 200, { agents, mock: false, ts: Date.now() })
-  } catch (err) {
-    console.error('[api/agents/status] error:', err.message)
-    return jsonResponse(res, 200, { agents: getMockAgentsStatus(), mock: true, error: err.message, ts: Date.now() })
   }
+
+  // 2. Try stale push store with STALE source badge
+  if (store && Array.isArray(store.agents) && store.agents.length > 0) {
+    const ageMs = Date.now() - Number(store.ts || 0)
+    return jsonResponse(res, 200, {
+      agents: store.agents,
+      mock: false,
+      source: 'STALE',
+      staleMs: ageMs,
+      ts: store.ts,
+      pushedAt: store.pushedAt,
+    })
+  }
+
+  // 3. Gateway RPC fallback
+  if (getGatewayConfig()) {
+    try {
+      const [agentsResult, sessionsResult] = await Promise.allSettled([
+        tryGatewayRpc('agents.list'),
+        tryGatewayRpc('sessions.list', { limit: 100, activeMinutes: 60 }),
+      ])
+
+      const agentList = agentsResult.status === 'fulfilled' ? (agentsResult.value?.agents ?? []) : []
+      const sessionList = sessionsResult.status === 'fulfilled'
+        ? (sessionsResult.value?.sessions ?? sessionsResult.value ?? []) : []
+
+      const agents = agentList.map((agent, i) => {
+        const agentId = agent.id || agent.agentId || `agent-${i}`
+        const status = deriveStatus(agentId, sessionList)
+
+        const agentSessions = sessionList
+          .filter((s) => (s.key || '').includes(`agent:${agentId}:`) || s.agentId === agentId)
+          .sort((a, b) => (b.lastActiveMs || 0) - (a.lastActiveMs || 0))
+
+        const mostRecent = agentSessions[0]
+        const currentTask = mostRecent ? describeSession(mostRecent) : null
+        const lastActiveMs = mostRecent?.lastActiveMs || agent.lastActiveMs || null
+
+        return {
+          id: agentId,
+          name: agent.name || agent.displayName || agentId,
+          role: agent.role || 'Agent',
+          avatar: agent.avatar || agent.emoji || '🤖',
+          status,
+          tasksCompleted: agent.tasksCompleted || 0,
+          tasksRunning: agentSessions.filter((s) => {
+            const now = Date.now()
+            return s.lastActiveMs && now - s.lastActiveMs < 2 * 60_000
+          }).length,
+          currentTask: currentTask || '',
+          uptime: agent.uptime || 0,
+          load: status === 'busy' ? 75 : status === 'online' ? 30 : 5,
+          lastActiveMs,
+          sparkline: [30, 30, 30, 30, 30, 30, 30, status === 'busy' ? 75 : 30],
+        }
+      })
+
+      return jsonResponse(res, 200, { agents, mock: false, source: 'RPC', ts: Date.now() })
+    } catch (err) {
+      console.error('[api/agents/status] RPC error:', err.message)
+    }
+  }
+
+  // 4. Mock fallback
+  return jsonResponse(res, 200, { agents: getMockAgentsStatus(), mock: true, source: 'MOCK', ts: Date.now() })
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export async function handler(req, res, slug) {
+  const route = slug[0] || ''
+
+  // POST /api/agents/sync — machine-to-machine, no user session required
+  if (route === 'sync') return handleSync(req, res)
+
+  // All other routes require user session
   if (!requireUserSession(req, res)) return
   if (!checkHiveApiKey(req)) return unauthorizedResponse(res)
-
-  const route = slug[0] || ''
 
   if (route === 'activity') return handleActivity(req, res)
   if (route === 'status') return handleStatus(req, res)

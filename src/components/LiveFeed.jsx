@@ -46,7 +46,19 @@ function normalizeEvent(event, fallbackId) {
 let syntheticIdx = 0
 let eventSeq = 100
 
-export default function LiveFeed({ agents = [], events: propEvents = null }) {
+function getSourceBadge(meta) {
+  if (!meta) return null
+  const source = meta.source || 'MOCK'
+  const staleMs = meta.staleMs || (meta.pushedAt ? Date.now() - meta.pushedAt : null)
+  const isStaleData = staleMs && staleMs > 5 * 60_000
+
+  if (source === 'MOCK') return { label: '🔴 MOCK', color: '#b45309', bg: 'rgba(245,158,11,0.12)' }
+  if (source === 'STALE' || isStaleData) return { label: '🟡 STALE', color: '#92400e', bg: 'rgba(245,158,11,0.12)' }
+  if (source === 'PUSH' || source === 'RPC') return { label: '🟢 LIVE', color: '#047857', bg: 'rgba(16,185,129,0.12)' }
+  return { label: '🟢 LIVE', color: '#047857', bg: 'rgba(16,185,129,0.12)' }
+}
+
+export default function LiveFeed({ agents = [], events: propEvents = null, meta = null }) {
   // When propEvents is provided (real API data), seed the feed from it.
   // Otherwise fall back to the mock seed.
   const seedEvents = propEvents && propEvents.length > 0 ? propEvents : createEventFeed(Date.now())
@@ -86,6 +98,7 @@ export default function LiveFeed({ agents = [], events: propEvents = null }) {
   const freshnessLabel = formatFreshness(latestEventTs || null)
   const stale = isStale(latestEventTs || null, 10 * 60 * 1000)
   const sourceLabel = propEvents && propEvents.length > 0 ? 'API FEED' : 'SIMULATED FEED'
+  const sourceBadge = getSourceBadge(meta)
 
   return (
     <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
@@ -95,6 +108,12 @@ export default function LiveFeed({ agents = [], events: propEvents = null }) {
             Live Feed
           </h2>
           <span className="section-chip">{sourceLabel}</span>
+          {sourceBadge && (
+            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
+              style={{ background: sourceBadge.bg, color: sourceBadge.color }}>
+              {sourceBadge.label}
+            </span>
+          )}
           {/* Live indicator */}
           <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
             style={{ background: paused ? 'var(--color-surface-2)' : 'rgba(34,197,94,0.12)', color: paused ? 'var(--color-text-muted)' : 'var(--color-success)', border: `1px solid ${paused ? 'var(--color-border)' : 'rgba(34,197,94,0.3)'}` }}>
