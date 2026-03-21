@@ -21,6 +21,7 @@ import ActivityFeed from './components/ActivityFeed'
 import UsageTracker from './components/UsageTracker'
 import ChannelActivityPanel from './components/ChannelActivityPanel'
 import OvernightBriefing from './components/OvernightBriefing'
+import MultiAgentView from './components/MultiAgentView'
 import { ApiError, fetchAuthState, fetchDashboardData } from './data/api'
 import { usePolling } from './hooks/usePolling'
 
@@ -371,6 +372,8 @@ function Dashboard() {
 
             {/* Agent status: always show cards grid; also show compact panel when enabled */}
             <AgentGrid agents={dashboard.agents} />
+
+            <MultiAgentView sessions={dashboard.sessions} events={dashboard.events} />
 
             {ENABLE_REALTIME_STATUS_PANEL && dashboard.realtimeStatusPanel?.agents?.length > 0 && (
               <RealTimeStatusPanel panel={dashboard.realtimeStatusPanel} />
